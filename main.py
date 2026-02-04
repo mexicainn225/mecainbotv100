@@ -114,7 +114,7 @@ def check_signal(msg):
 
     if u_id == ADMIN_ID or user_data.get('is_vip'):
         start_time, cote, prev = get_universal_signal()
-        txt = (f"🚀 **SIGNAL CONFIRMÉ**\n\n⚡️ **HEURE** : `{start_time.strftime('%H:%M')} - {(start_time + timedelta(minutes=2)).strftime('%H:%M')}`\n"
+        txt = (f"🚀 **SIGNAL CONFIRMÉ**\n\n⚡️ **HEURE** : `{start_time.strftime('%H:%M')} - {(start_time + timedelta(minutes=1)).strftime('%H:%M')}`\n"
                f"⚡️ **CÔTE** : `{cote}X+` \n⚡️ **PRÉVISION** : `{prev}X+` \n\n🎁 **CODE** : `{CODE_PROMO}`")
         bot.send_video(msg.chat.id, ID_VIDEO_UNIQUE, caption=txt, reply_markup=kb, parse_mode='Markdown')
     else:
