@@ -72,7 +72,7 @@ def get_universal_signal():
     
     start_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
     random.seed(start_time.timestamp()) 
-    cote, prev = random.randint(30, 150), random.randint(10, 25)
+    cote, prev = random.randint(10, 120), random.randint(4, 7)
     random.seed() 
     return start_time, cote, prev
 
