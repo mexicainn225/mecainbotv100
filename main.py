@@ -65,7 +65,7 @@ def get_universal_signal():
     
     next_sig_total = base_minute
     while next_sig_total <= total_minutes_now:
-        next_sig_total += 19 
+        next_sig_total += 14 
         
     target_hour = (next_sig_total // 60) % 24
     target_minute = next_sig_total % 60
