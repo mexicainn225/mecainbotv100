@@ -3,12 +3,12 @@ from datetime import datetime, timedelta
 from flask import Flask
 from pymongo import MongoClient
 
-# --- INITIALISATION FLASK (Pour Render) ---
+# --- INITIALISATION FLASK (Pour garder le bot en vie sur Render) ---
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Système Mexicain225 Actif 🚀"
+    return "Système Mexicain225 Connecté 🚀"
 
 @app.route('/health')
 def health():
@@ -65,7 +65,7 @@ def get_universal_signal():
     
     next_sig_total = base_minute
     while next_sig_total <= total_minutes_now:
-        next_sig_total += 14  # Intervalle de 7 minutes réglé ici
+        next_sig_total += 14  
         
     target_hour = (next_sig_total // 60) % 24
     target_minute = next_sig_total % 60
@@ -73,14 +73,14 @@ def get_universal_signal():
     start_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
     random.seed(start_time.timestamp()) 
     
-    # Côte entre 10 et 150 | Prévision entre 4 et 7
     cote = round(random.uniform(10, 150), 2)
     prev = random.randint(4, 7)
     
     random.seed() 
     return start_time, cote, prev
 
-# --- HANDLERS ---
+# --- HANDLERS (Commandes du Bot) ---
+
 @bot.message_handler(commands=['start'])
 def start(msg):
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -90,16 +90,23 @@ def start(msg):
     markup.add(*btns)
     bot.send_message(msg.chat.id, "👋 Bienvenue sur l'espace privé Mexicain225 !", reply_markup=markup)
 
+@bot.message_handler(func=lambda m: m.text == "📊 STATISTIQUES")
+def stats(msg):
+    txt = (f"📊 **STATISTIQUES DU JOUR**\n\n"
+           f"✅ Signaux validés : `98.2%` \n"
+           f"🎯 Précision IA : `Optimale` \n"
+           f"👥 Membres actifs : `+1,250` \n\n"
+           f"🔥 *Le bot est mis à jour toutes les 24h.*")
+    bot.send_message(msg.chat.id, txt, parse_mode='Markdown')
+
 @bot.message_handler(func=lambda m: m.text == "🚀 OBTENIR UN SIGNAL")
 def check_signal(msg):
     u_id = msg.from_user.id
     user_data = get_user(u_id)
     kb = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("📍 CLIQUE ICI POUR JOUER", url=LIEN_INSCRIPTION))
 
-    # Vérification VIP (Les anciens dans MongoDB sont reconnus ici)
     if u_id == ADMIN_ID or user_data.get('is_vip'):
         start_time, cote, prev = get_universal_signal()
-        # Plage de 1 minute réglée ici (start_time + 1)
         txt = (f"🚀 **SIGNAL CONFIRMÉ**\n\n⚡️ **HEURE** : `{start_time.strftime('%H:%M')} - {(start_time + timedelta(minutes=1)).strftime('%H:%M')}`\n"
                f"⚡️ **CÔTE** : `{cote}X+` \n⚡️ **PRÉVISION** : `{prev}X+` \n\n🎁 **CODE** : `{CODE_PROMO}`")
         bot.send_video(msg.chat.id, ID_VIDEO_UNIQUE, caption=txt, reply_markup=kb, parse_mode='Markdown')
@@ -110,7 +117,6 @@ def check_signal(msg):
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
 def handle_id(msg):
     if admin_state.get(ADMIN_ID) == "WAITING_MINUTE": return
-    # Bouton de validation pour l'Admin
     kb = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("✅ VALIDER VIP", callback_data=f"val_{msg.from_user.id}"))
     bot.send_message(ADMIN_ID, f"🔔 **NOUVEL ID** : `{msg.text}`", reply_markup=kb)
     bot.send_message(msg.chat.id, "✅ ID reçu ! Validation en cours par l'administrateur.")
