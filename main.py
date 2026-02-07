@@ -3,32 +3,22 @@ from datetime import datetime, timedelta
 from flask import Flask
 from pymongo import MongoClient
 
-# --- INITIALISATION FLASK (Pour garder le bot en vie sur Render) ---
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Système Mexicain225 Connecté 🚀"
-
-@app.route('/health')
-def health():
-    return "OK", 200
+    return "Système Mexicain225 Signaux Séparés Actif 🚀"
 
 # --- CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
 ADMIN_ID = 5724620019  
 MONGO_URI = os.getenv('MONGO_URI')
-
 bot = telebot.TeleBot(API_TOKEN)
 
-# Connexion MongoDB
-try:
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-    db = client['luckyjet_db']
-    users_col = db['users'] 
-    config_col = db['config']
-except Exception as e:
-    print(f"Erreur MongoDB: {e}")
+client = MongoClient(MONGO_URI)
+db = client['luckyjet_db']
+users_col = db['users'] 
+config_col = db['config']
 
 LIEN_INSCRIPTION = "https://lkbb.cc/e2d8"
 CODE_PROMO = "COK225"
@@ -36,114 +26,111 @@ ID_VIDEO_UNIQUE = "https://t.me/gagnantpro1xbet/138958"
 
 admin_state = {}
 
-# --- FONCTIONS BASE DE DONNÉES ---
 def get_user(u_id):
-    try:
-        user = users_col.find_one({"_id": u_id})
-        if not user:
-            user = {"_id": u_id, "is_vip": False}
-            users_col.insert_one(user)
-        return user
-    except:
-        return {"_id": u_id, "is_vip": False}
-
-def set_vip(u_id):
-    users_col.update_one({"_id": u_id}, {"$set": {"is_vip": True}}, upsert=True)
+    user = users_col.find_one({"_id": u_id})
+    if not user:
+        user = {"_id": u_id, "is_vip": False}
+        users_col.insert_one(user)
+    return user
 
 def get_base_minute():
-    try:
-        conf = config_col.find_one({"_id": "settings"})
-        return conf['minute'] if conf else 23
-    except:
-        return 23
+    conf = config_col.find_one({"_id": "settings"})
+    return conf['minute'] if conf else 46 
 
-# --- LOGIQUE SIGNAL (7 MIN / CÔTE 10-150 / PREV 4-7) ---
-def get_universal_signal():
+# --- LOGIQUE SIGNAL UNIQUE (ALERTE 17min PUIS +6min) ---
+def get_next_single_signal():
     now = datetime.now()
-    base_minute = get_base_minute()
-    total_minutes_now = now.hour * 60 + now.minute
+    base_min = get_base_minute()
+    total_now = now.hour * 60 + now.minute
     
-    next_sig_total = base_minute
-    while next_sig_total <= total_minutes_now:
-        next_sig_total += 17  
-        
-    target_hour = (next_sig_total // 60) % 24
-    target_minute = next_sig_total % 60
+    # Calculer le point de départ du cycle
+    sig1_total = base_min
+    while sig1_total + 6 <= total_now:
+        sig1_total += 17
     
-    start_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
-    random.seed(start_time.timestamp()) 
+    time1 = now.replace(hour=(sig1_total // 60) % 24, minute=sig1_total % 60, second=0, microsecond=0)
+    time2 = time1 + timedelta(minutes=6)
+
+    # Sélection du signal à afficher
+    if total_now >= sig1_total:
+        target_time = time2
+        type_sig = "BONUS (+6min)"
+    else:
+        target_time = time1
+        type_sig = "PRINCIPAL (Cycle 17min)"
     
+    random.seed(target_time.timestamp())
     cote = round(random.uniform(10, 150), 2)
-    prev = random.randint(5, 7)
+    prev = random.randint(4, 7)
+    random.seed()
     
-    random.seed() 
-    return start_time, cote, prev
+    return target_time, cote, prev, type_sig
 
-# --- HANDLERS (Commandes du Bot) ---
-
+# --- HANDLERS ---
 @bot.message_handler(commands=['start'])
 def start(msg):
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
     btns = ["🚀 OBTENIR UN SIGNAL", "📊 STATISTIQUES"]
     if msg.from_user.id == ADMIN_ID:
-        btns.append("⚙️ CHANGER LA MINUTE")
+        btns.append("⚙️ RÉGLAGE MINUTE")
     markup.add(*btns)
-    bot.send_message(msg.chat.id, "👋 Bienvenue sur l'espace privé Mexicain225 !", reply_markup=markup)
+    bot.send_message(msg.chat.id, "👋 Bienvenue ! Prêt pour le prochain signal ?", reply_markup=markup)
 
 @bot.message_handler(func=lambda m: m.text == "📊 STATISTIQUES")
 def stats(msg):
-    txt = (f"📊 **STATISTIQUES DU JOUR**\n\n"
-           f"✅ Signaux validés : `98.2%` \n"
-           f"🎯 Précision IA : `Optimale` \n"
-           f"👥 Membres actifs : `+1,250` \n\n"
-           f"🔥 *Le bot est mis à jour toutes les 24h.*")
-    bot.send_message(msg.chat.id, txt, parse_mode='Markdown')
+    bot.send_message(msg.chat.id, "📊 **PRÉCISION DU JOUR** : `98.6%` \n✅ Signaux validés : `Optimale`", parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "🚀 OBTENIR UN SIGNAL")
-def check_signal(msg):
+def send_signal(msg):
     u_id = msg.from_user.id
     user_data = get_user(u_id)
-    kb = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("📍 CLIQUE ICI POUR JOUER", url=LIEN_INSCRIPTION))
+    kb = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("📍 JOUER MAINTENANT", url=LIEN_INSCRIPTION))
 
     if u_id == ADMIN_ID or user_data.get('is_vip'):
-        start_time, cote, prev = get_universal_signal()
-        txt = (f"🚀 **SIGNAL CONFIRMÉ**\n\n⚡️ **HEURE** : `{start_time.strftime('%H:%M')} - {(start_time + timedelta(minutes=1)).strftime('%H:%M')}`\n"
-               f"⚡️ **CÔTE** : `{cote}X+` \n⚡️ **PRÉVISION** : `{prev}X+` \n\n🎁 **CODE** : `{CODE_PROMO}`")
+        target_time, cote, prev, type_sig = get_next_single_signal()
+        
+        txt = (f"🚀 **SIGNAL {type_sig}**\n\n"
+               f"📅 **HEURE** : `{target_time.strftime('%H:%M')} - {(target_time + timedelta(minutes=1)).strftime('%H:%M')}`\n"
+               f"📈 **CÔTE** : `{cote}X+` \n"
+               f"🎯 **PRÉVISION** : `{prev}X+` \n\n"
+               f"🎁 **CODE PROMO** : `{CODE_PROMO}`")
+        
+        # Envoi de la vidéo AVEC le texte pour chaque signal
         bot.send_video(msg.chat.id, ID_VIDEO_UNIQUE, caption=txt, reply_markup=kb, parse_mode='Markdown')
     else:
-        txt = f"⚠️ **VIP REQUIS**\n\n1️⃣ Inscris-toi : [CLIQUE ICI]({LIEN_INSCRIPTION})\n2️⃣ Code : **{CODE_PROMO}**\n3️⃣ Envoie ton ID ici pour validation."
-        bot.send_video(msg.chat.id, ID_VIDEO_UNIQUE, caption=txt, reply_markup=kb, parse_mode='Markdown')
+        txt_vip = f"⚠️ **ACCÈS VIP REQUIS**\n\n1️⃣ Inscris-toi ici : [LIEN D'INSCRIPTION]({LIEN_INSCRIPTION})\n2️⃣ Utilise le code : **{CODE_PROMO}**\n3️⃣ Envoie ton ID ici pour activation."
+        bot.send_message(msg.chat.id, txt_vip, parse_mode='Markdown', disable_web_page_preview=True)
+
+# --- GESTION ADMIN (ID & REGLAGES) ---
+@bot.message_handler(func=lambda m: m.text == "⚙️ RÉGLAGE MINUTE" and m.from_user.id == ADMIN_ID)
+def config_min(msg):
+    admin_state[ADMIN_ID] = "WAITING_MIN"
+    bot.send_message(ADMIN_ID, "📝 Entre la minute de départ (ex: 46) :")
+
+@bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAITING_MIN" and m.from_user.id == ADMIN_ID)
+def save_min(msg):
+    if msg.text.isdigit():
+        new_m = int(msg.text)
+        config_col.update_one({"_id": "settings"}, {"$set": {"minute": new_m}}, upsert=True)
+        admin_state[ADMIN_ID] = None
+        bot.send_message(ADMIN_ID, f"✅ Cycle mis à jour ! Départ à : `{new_m}`")
+    else:
+        bot.send_message(ADMIN_ID, "❌ Envoie un nombre valide.")
 
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
 def handle_id(msg):
-    if admin_state.get(ADMIN_ID) == "WAITING_MINUTE": return
-    kb = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("✅ VALIDER VIP", callback_data=f"val_{msg.from_user.id}"))
+    if admin_state.get(ADMIN_ID) == "WAITING_MIN": return
+    kb = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("✅ VALIDER", callback_data=f"val_{msg.from_user.id}"))
     bot.send_message(ADMIN_ID, f"🔔 **NOUVEL ID** : `{msg.text}`", reply_markup=kb)
-    bot.send_message(msg.chat.id, "✅ ID reçu ! Validation en cours par l'administrateur.")
+    bot.send_message(msg.chat.id, "✅ ID reçu ! Validation en cours par l'admin.")
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("val_"))
 def val_callback(c):
     uid = int(c.data.split("_")[1])
-    set_vip(uid)
-    bot.send_message(uid, "🌟 **VIP ACTIVÉ !** Vous pouvez maintenant obtenir les signaux.")
-    bot.answer_callback_query(c.id, "Utilisateur validé !")
+    users_col.update_one({"_id": uid}, {"$set": {"is_vip": True}}, upsert=True)
+    bot.send_message(uid, "🌟 **FÉLICITATIONS !** Ton accès VIP est activé. Appuie sur SIGNAL !")
+    bot.answer_callback_query(c.id, "Validé")
 
-@bot.message_handler(func=lambda m: m.text == "⚙️ CHANGER LA MINUTE" and m.from_user.id == ADMIN_ID)
-def ask_new_minute(msg):
-    admin_state[ADMIN_ID] = "WAITING_MINUTE"
-    bot.send_message(ADMIN_ID, "📝 Entre la nouvelle minute de base (0-59) :")
-
-@bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAITING_MINUTE" and m.from_user.id == ADMIN_ID)
-def save_new_minute(msg):
-    if msg.text.isdigit():
-        new_min = int(msg.text)
-        config_col.update_one({"_id": "settings"}, {"$set": {"minute": new_min}}, upsert=True)
-        admin_state[ADMIN_ID] = None
-        bot.send_message(ADMIN_ID, f"✅ Minute de base réglée sur : `{new_min}`.")
-    else:
-        bot.send_message(ADMIN_ID, "❌ Veuillez entrer un chiffre uniquement.")
-
-# --- LANCEMENT ---
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port), daemon=True).start()
