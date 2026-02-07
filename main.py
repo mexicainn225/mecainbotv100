@@ -76,7 +76,7 @@ def get_universal_signal():
     cote = round(random.uniform(10, 150), 2)
     prev = random.randint(5, 7)
     
-     random.seed() 
+    random.seed() 
     return start_time, cote, prev
 
 # --- HANDLERS (Commandes du Bot) ---
