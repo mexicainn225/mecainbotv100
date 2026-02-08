@@ -49,12 +49,12 @@ def get_next_single_signal():
         sig1_total += 17
     
     time1 = now.replace(hour=(sig1_total // 60) % 24, minute=sig1_total % 60, second=0, microsecond=0)
-    time2 = time1 + timedelta(minutes=6)
+    time2 = time1 + timedelta(minutes=5)
 
     # Sélection du signal à afficher
     if total_now >= sig1_total:
         target_time = time2
-        type_sig = "BONUS (+6min)"
+        type_sig = "BONUS (+5min)"
     else:
         target_time = time1
         type_sig = "PRINCIPAL (Cycle 17min)"
