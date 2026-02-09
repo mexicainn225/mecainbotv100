@@ -44,11 +44,11 @@ def get_next_single_signal():
     total_now = now.hour * 60 + now.minute
     
     sig1_total = base_min
-    while sig1_total + 10 <= total_now:
+    while sig1_total + 9 <= total_now:
         sig1_total += 17
     
     time_principal = now.replace(hour=(sig1_total // 60) % 24, minute=sig1_total % 60, second=0, microsecond=0)
-    time_rattrapage = time_principal + timedelta(minutes=10)
+    time_rattrapage = time_principal + timedelta(minutes=9)
 
     if total_now >= sig1_total:
         target_time = time_rattrapage
