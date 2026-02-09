@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Système Mexicain225 - Cycle 17min Actif 🚀"
+    return "Système Mexicain225 - Privé Actif 🚀"
 
 # --- CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
@@ -37,26 +37,32 @@ def get_base_minute():
     conf = config_col.find_one({"_id": "settings"})
     return conf['minute'] if conf else 46 
 
-# --- LOGIQUE SIGNAL UNIQUE (CYCLE 17 MIN UNIQUEMENT) ---
+# --- LOGIQUE : PRINCIPAL & RATTRAPAGE (SANS MENTION DE TEMPS) ---
 def get_next_single_signal():
     now = datetime.now()
     base_min = get_base_minute()
     total_now = now.hour * 60 + now.minute
     
-    # Calcul du prochain créneau de 17 min
-    sig_total = base_min
-    while sig_total <= total_now:
-        sig_total += 17
+    sig1_total = base_min
+    while sig1_total + 10 <= total_now:
+        sig1_total += 17
     
-    target_time = now.replace(hour=(sig_total // 60) % 24, minute=sig_total % 60, second=0, microsecond=0)
+    time_principal = now.replace(hour=(sig1_total // 60) % 24, minute=sig1_total % 60, second=0, microsecond=0)
+    time_rattrapage = time_principal + timedelta(minutes=10)
+
+    if total_now >= sig1_total:
+        target_time = time_rattrapage
+        type_sig = "RATTRAPAGE ⚠️"
+    else:
+        target_time = time_principal
+        type_sig = "PRINCIPAL ✅"
     
-    # Génération aléatoire basée sur l'heure du signal
     random.seed(target_time.timestamp())
     cote = round(random.uniform(10, 150), 2)
     prev = random.randint(4, 7)
     random.seed()
     
-    return target_time, cote, prev
+    return target_time, cote, prev, type_sig
 
 # --- HANDLERS ---
 @bot.message_handler(commands=['start'])
@@ -68,10 +74,6 @@ def start(msg):
     markup.add(*btns)
     bot.send_message(msg.chat.id, "👋 Bienvenue ! Prêt pour le prochain signal ?", reply_markup=markup)
 
-@bot.message_handler(func=lambda m: m.text == "📊 STATISTIQUES")
-def stats(msg):
-    bot.send_message(msg.chat.id, "📊 **PRÉCISION DU JOUR** : `98.6%` \n✅ Signaux validés : `Optimale`", parse_mode='Markdown')
-
 @bot.message_handler(func=lambda m: m.text == "🚀 OBTENIR UN SIGNAL")
 def send_signal(msg):
     u_id = msg.from_user.id
@@ -79,9 +81,9 @@ def send_signal(msg):
     kb = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("📍 JOUER MAINTENANT", url=LIEN_INSCRIPTION))
 
     if u_id == ADMIN_ID or user_data.get('is_vip'):
-        target_time, cote, prev = get_next_single_signal()
+        target_time, cote, prev, type_sig = get_next_single_signal()
         
-        txt = (f"🚀 **NOUVELLE PRÉVISION**\n\n"
+        txt = (f"🚀 **SIGNAL {type_sig}**\n\n"
                f"📅 **HEURE** : `{target_time.strftime('%H:%M')} - {(target_time + timedelta(minutes=1)).strftime('%H:%M')}`\n"
                f"📈 **CÔTE** : `{cote}X+` \n"
                f"🎯 **PRÉVISION** : `{prev}X+` \n\n"
@@ -106,7 +108,7 @@ def save_min(msg):
         admin_state[ADMIN_ID] = None
         bot.send_message(ADMIN_ID, f"✅ Cycle mis à jour ! Départ à : `{new_m}`")
     else:
-        bot.send_message(ADMIN_ID, "❌ Envoie un nombre valide.")
+        bot.send_message(ADMIN_ID, "❌ Nombre invalide.")
 
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
 def handle_id(msg):
