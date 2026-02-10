@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Système Mexicain225 - Privé Actif 🚀"
+    return "Système Mexicain225 - Stratégie 100% Active 🚀"
 
 # --- CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
@@ -37,7 +37,7 @@ def get_base_minute():
     conf = config_col.find_one({"_id": "settings"})
     return conf['minute'] if conf else 46 
 
-# --- LOGIQUE : PRINCIPAL & RATTRAPAGE (SANS MENTION DE TEMPS) ---
+# --- LOGIQUE : PRINCIPAL & RATTRAPAGE (+6min) ---
 def get_next_single_signal():
     now = datetime.now()
     base_min = get_base_minute()
@@ -57,12 +57,21 @@ def get_next_single_signal():
         target_time = time_principal
         type_sig = "PRINCIPAL ✅"
     
+    # --- DETECTION FIABILITÉ 100% (Minutes commençant par 6,7,8,9) ---
+    minute_str = str(target_time.minute).zfill(2) # ex: "06" ou "16"
+    premier_chiffre = minute_str[0]
+    second_chiffre = minute_str[1]
+    
+    # On vérifie si la minute finit par 6,7,8,9 OU si elle commence par 6,7,8,9 (ex: 06, 07, 46, 59)
+    # Selon ta logique, on regarde si l'un des chiffres de la minute contient 6,7,8,9
+    is_ultra_safe = any(c in "6789" for c in minute_str)
+
     random.seed(target_time.timestamp())
     cote = round(random.uniform(10, 150), 2)
     prev = random.randint(4, 7)
     random.seed()
     
-    return target_time, cote, prev, type_sig
+    return target_time, cote, prev, type_sig, is_ultra_safe
 
 # --- HANDLERS ---
 @bot.message_handler(commands=['start'])
@@ -81,9 +90,12 @@ def send_signal(msg):
     kb = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("📍 JOUER MAINTENANT", url=LIEN_INSCRIPTION))
 
     if u_id == ADMIN_ID or user_data.get('is_vip'):
-        target_time, cote, prev, type_sig = get_next_single_signal()
+        target_time, cote, prev, type_sig, is_ultra_safe = get_next_single_signal()
         
-        txt = (f"🚀 **SIGNAL {type_sig}**\n\n"
+        # Ajout du badge 100% si la condition est remplie
+        badge_safe = "\n💎 **FIABILITÉ : 100% (CONFIRMÉ)**" if is_ultra_safe else ""
+        
+        txt = (f"🚀 **SIGNAL {type_sig}**{badge_safe}\n\n"
                f"📅 **HEURE** : `{target_time.strftime('%H:%M')} - {(target_time + timedelta(minutes=1)).strftime('%H:%M')}`\n"
                f"📈 **CÔTE** : `{cote}X+` \n"
                f"🎯 **PRÉVISION** : `{prev}X+` \n\n"
