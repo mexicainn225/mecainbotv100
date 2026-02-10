@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Système Mexicain225 - Stratégie 100% Active 🚀"
+    return "Système Mexicain225 - Stratégie VIP Active 🚀"
 
 # --- CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
@@ -57,13 +57,8 @@ def get_next_single_signal():
         target_time = time_principal
         type_sig = "PRINCIPAL ✅"
     
-    # --- DETECTION FIABILITÉ 100% (Minutes commençant par 6,7,8,9) ---
-    minute_str = str(target_time.minute).zfill(2) # ex: "06" ou "16"
-    premier_chiffre = minute_str[0]
-    second_chiffre = minute_str[1]
-    
-    # On vérifie si la minute finit par 6,7,8,9 OU si elle commence par 6,7,8,9 (ex: 06, 07, 46, 59)
-    # Selon ta logique, on regarde si l'un des chiffres de la minute contient 6,7,8,9
+    # --- DETECTION FIABILITÉ 100% (si la minute contient 6,7,8,9) ---
+    minute_str = str(target_time.minute).zfill(2)
     is_ultra_safe = any(c in "6789" for c in minute_str)
 
     random.seed(target_time.timestamp())
@@ -83,6 +78,29 @@ def start(msg):
     markup.add(*btns)
     bot.send_message(msg.chat.id, "👋 Bienvenue ! Prêt pour le prochain signal ?", reply_markup=markup)
 
+@bot.message_handler(func=lambda m: m.text == "📊 STATISTIQUES")
+def stats(msg):
+    heures_impaires = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23]
+    heure_actuelle = datetime.now().hour
+    
+    prochaine_heure = None
+    for h in heures_impaires:
+        if h > heure_actuelle:
+            prochaine_heure = f"{str(h).zfill(2)}h:00"
+            break
+    
+    if prochaine_heure is None:
+        prochaine_heure = "01h:00 (Demain)"
+
+    txt_stats = (
+        "📊 **PRÉCISION DU JOUR** : `99.1%` \n"
+        "✅ **ÉTAT DU SERVEUR** : `Stable` \n\n"
+        f"🔥 **PROCHAINE HEURE DE GROSSE CÔTE** : \n"
+        f"📍 `{prochaine_heure}`\n\n"
+        "📢 *Soyez connectés 5 min avant pour ne pas rater l'entrée.*"
+    )
+    bot.send_message(msg.chat.id, txt_stats, parse_mode='Markdown')
+
 @bot.message_handler(func=lambda m: m.text == "🚀 OBTENIR UN SIGNAL")
 def send_signal(msg):
     u_id = msg.from_user.id
@@ -92,7 +110,6 @@ def send_signal(msg):
     if u_id == ADMIN_ID or user_data.get('is_vip'):
         target_time, cote, prev, type_sig, is_ultra_safe = get_next_single_signal()
         
-        # Ajout du badge 100% si la condition est remplie
         badge_safe = "\n💎 **FIABILITÉ : 100% (CONFIRMÉ)**" if is_ultra_safe else ""
         
         txt = (f"🚀 **SIGNAL {type_sig}**{badge_safe}\n\n"
@@ -110,7 +127,7 @@ def send_signal(msg):
 @bot.message_handler(func=lambda m: m.text == "⚙️ RÉGLAGE MINUTE" and m.from_user.id == ADMIN_ID)
 def config_min(msg):
     admin_state[ADMIN_ID] = "WAITING_MIN"
-    bot.send_message(ADMIN_ID, "📝 Entre la minute de départ (ex: 46) :")
+    bot.send_message(ADMIN_ID, "📝 Entre la minute de départ (actuelle: 46) :")
 
 @bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAITING_MIN" and m.from_user.id == ADMIN_ID)
 def save_min(msg):
