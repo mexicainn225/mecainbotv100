@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Système Mexicain225 - Multi-Signaux Actif 🚀"
+    return "Système Mexicain225 - Multi-Signaux Automatiques Actif 🚀"
 
 # --- CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
@@ -51,7 +51,7 @@ def send_subscription_block(chat_id):
                f"🚀 *Accès à vie après activation.*")
     bot.send_message(chat_id, txt_vip, parse_mode='Markdown', disable_web_page_preview=True)
 
-# --- LOGIQUE SIGNAL NORMAL ---
+# --- LOGIQUE SIGNAL NORMAL (Répétition Cycle 17min) ---
 def get_next_single_signal():
     now = datetime.now()
     base_min = get_base_minute()
@@ -70,7 +70,7 @@ def get_next_single_signal():
     random.seed()
     return target_time, cote, prev, type_sig
 
-# --- LOGIQUE MULTI GROSSE CÔTE ---
+# --- LOGIQUE GROSSE CÔTE (Répétition automatique chaque heure) ---
 def get_grosse_cote_signal():
     now = datetime.now()
     minutes_list = get_grosse_cote_list()
@@ -78,20 +78,30 @@ def get_grosse_cote_signal():
     
     total_now = now.hour * 60 + now.minute
     target_min = None
+    target_hour = now.hour
     
-    # Chercher la première minute de la liste qui n'est pas encore passée
-    for m in sorted(minutes_list):
-        t_rattrapage_total = now.hour * 60 + m
-        if total_now < t_rattrapage_total:
+    sorted_mins = sorted(minutes_list)
+    
+    # 1. On cherche dans l'heure actuelle
+    for m in sorted_mins:
+        if total_now < (now.hour * 60 + m):
             target_min = m
+            target_hour = now.hour
             break
             
-    if target_min is None: return "EXPIRED"
+    # 2. Si fini pour cette heure, on saute à l'heure suivante (H+1)
+    if target_min is None:
+        target_min = sorted_mins[0]
+        target_hour = (now.hour + 1) % 24
     
-    t_rattrapage = now.replace(minute=target_min, second=0, microsecond=0)
+    t_rattrapage = now.replace(hour=target_hour, minute=target_min, second=0, microsecond=0)
     t_principal = t_rattrapage - timedelta(minutes=10)
     
-    if total_now >= (t_principal.hour * 60 + t_principal.minute):
+    # Déterminer si on affiche le principal ou le rattrapage
+    total_target_p = t_principal.hour * 60 + t_principal.minute
+    if target_hour > now.hour: # Si c'est pour l'heure suivante, on montre d'abord le principal
+         target_time, type_sig = t_principal, "CONFIRMÉ 💎"
+    elif total_now >= total_target_p:
         target_time, type_sig = t_rattrapage, "RATTRAPAGE 🔥"
     else:
         target_time, type_sig = t_principal, "CONFIRMÉ 💎"
@@ -111,7 +121,7 @@ def start(msg):
         btns.append("⚙️ RÉGLAGE MINUTE")
         btns.append("🔥 RÉGLAGE GROSSE CÔTE")
     markup.add(*btns)
-    bot.send_message(msg.chat.id, "👋 Session prête. Choisissez une option.", reply_markup=markup)
+    bot.send_message(msg.chat.id, "👋 Session active. Choisissez une option.", reply_markup=markup)
 
 @bot.message_handler(func=lambda m: m.text == "🚀 OBTENIR UN SIGNAL")
 def normal_sig(msg):
@@ -129,8 +139,8 @@ def big_sig(msg):
     u = get_user(msg.from_user.id)
     if msg.from_user.id == ADMIN_ID or u.get('is_vip'):
         res = get_grosse_cote_signal()
-        if res is None or res == "EXPIRED":
-            bot.send_message(msg.chat.id, "⏳ **ANALYSE EN COURS...**\n\nVeuillez patienter pour le prochain créneau.")
+        if res is None:
+            bot.send_message(msg.chat.id, "⏳ **ANALYSE EN COURS...**")
             return
         t_time, cote, prev, type_sig = res
         time_fmt = f"{t_time.strftime('%H:%M')} à {(t_time + timedelta(minutes=1)).strftime('%H:%M')}"
@@ -143,34 +153,33 @@ def big_sig(msg):
 @bot.message_handler(func=lambda m: m.text == "⚙️ RÉGLAGE MINUTE" and m.from_user.id == ADMIN_ID)
 def config_min(msg):
     admin_state[ADMIN_ID] = "WAIT_MIN"
-    bot.send_message(ADMIN_ID, "📝 Minute signal classique :")
+    bot.send_message(ADMIN_ID, "📝 Minute de base pour le cycle 17min :")
 
 @bot.message_handler(func=lambda m: m.text == "🔥 RÉGLAGE GROSSE CÔTE" and m.from_user.id == ADMIN_ID)
 def config_grosse(msg):
     admin_state[ADMIN_ID] = "WAIT_GROSSE"
-    bot.send_message(ADMIN_ID, "🔥 Entre les minutes séparées par des virgules (ex: 10, 25, 45) :")
+    bot.send_message(ADMIN_ID, "🔥 Entre les minutes à répéter chaque heure (ex: 12, 35, 50) :")
 
 @bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) in ["WAIT_MIN", "WAIT_GROSSE"] and m.from_user.id == ADMIN_ID)
 def save_configs(msg):
     text = msg.text
     if admin_state[ADMIN_ID] == "WAIT_MIN" and text.isdigit():
         config_col.update_one({"_id": "settings"}, {"$set": {"minute": int(text)}}, upsert=True)
-        bot.send_message(ADMIN_ID, "✅ Signal Classique réglé.")
+        bot.send_message(ADMIN_ID, "✅ Cycle 17min mis à jour.")
     elif admin_state[ADMIN_ID] == "WAIT_GROSSE":
         try:
-            # Transformation de "10, 20, 30" en [10, 20, 30]
             mins = [int(x.strip()) for x in text.split(',')]
             config_col.update_one({"_id": "grosse_cote"}, {"$set": {"minutes": mins}}, upsert=True)
-            bot.send_message(ADMIN_ID, f"✅ {len(mins)} signaux Grosses Côtes enregistrés.")
+            bot.send_message(ADMIN_ID, f"✅ Signaux répétitifs enregistrés : {mins}")
         except:
-            bot.send_message(ADMIN_ID, "❌ Erreur. Utilisez le format: 10, 20, 30")
+            bot.send_message(ADMIN_ID, "❌ Format incorrect. Exemple: 10, 25")
     admin_state[ADMIN_ID] = None
 
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
 def handle_id(msg):
     kb = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("✅ VALIDER", callback_data=f"val_{msg.from_user.id}"))
     bot.send_message(ADMIN_ID, f"🔔 ID REÇU : `{msg.text}`", reply_markup=kb)
-    bot.send_message(msg.chat.id, "✅ ID reçu ! Validation en cours.")
+    bot.send_message(msg.chat.id, "✅ ID reçu ! Activation en cours.")
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("val_"))
 def val_callback(c):
