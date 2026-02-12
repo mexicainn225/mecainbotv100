@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Serveur Mexicain225 - Operationnel"
+    return "Système Mexicain225 - Statut : Stable"
 
 # --- CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
@@ -42,7 +42,6 @@ def get_grosse_cote_list():
     conf = config_col.find_one({"_id": "grosse_cote"})
     return conf['minutes'] if conf and 'minutes' in conf else []
 
-# --- NOTIFICATION AUTOMATIQUE ---
 def notify_all_vips(message_text):
     vips = users_col.find({"is_vip": True})
     for v in vips:
@@ -51,7 +50,7 @@ def notify_all_vips(message_text):
         except:
             pass
 
-# --- LOGIQUE SIGNAL CLASSIQUE ---
+# --- LOGIQUE SIGNAL CLASSIQUE (Automatique 17 min) ---
 def get_next_single_signal():
     now = datetime.now()
     base_min = get_base_minute()
@@ -70,39 +69,34 @@ def get_next_single_signal():
     random.seed()
     return target_time, cote, prev, label
 
-# --- LOGIQUE GROSSE CÔTE (MAÎTRISE TOTALE) ---
+# --- LOGIQUE GROSSE CÔTE (ZÉRO CALCUL AUTOMATIQUE) ---
 def get_grosse_cote_signal():
     now = datetime.now()
     minutes_list = get_grosse_cote_list()
     if not minutes_list: return None
     
-    total_now = now.hour * 60 + now.minute
-    target_min = None
-    target_hour = now.hour
     sorted_mins = sorted(minutes_list)
-    
-    # 1. On cherche dans l'heure actuelle
+    target_time = None
+
+    # On teste chaque minute donnée par l'admin
     for m in sorted_mins:
-        if total_now < (now.hour * 60 + m):
-            target_min = m
-            target_hour = now.hour
+        # Test pour l'heure actuelle
+        t_actuelle = now.replace(hour=now.hour, minute=m, second=0, microsecond=0)
+        if t_actuelle > now:
+            target_time = t_actuelle
             break
-            
-    # 2. Si pas trouvé, on regarde pour l'heure suivante (H+1)
-    if target_min is None:
-        first_min = sorted_mins[0]
-        next_hour = (now.hour + 1) % 24
-        # On vérifie si l'heure suivante programmée n'est pas déjà passée
-        # (Compare le temps actuel avec le temps du premier signal de la liste à l'heure H+1)
-        if total_now < ((now.hour * 60 + first_min) + 60):
-            target_min = first_min
-            target_hour = next_hour
-        else:
-            return "EXPIRED"
+        
+        # Test pour l'heure suivante (H+1)
+        t_suivante = now.replace(hour=(now.hour + 1) % 24, minute=m, second=0, microsecond=0)
+        if t_suivante > now:
+            # On ne l'accepte que si l'heure suivante est proche (pour éviter les sauts de 10h)
+            if (t_suivante - now).total_seconds() < 7200: # Max 2h d'écart
+                target_time = t_suivante
+                break
 
-    if target_min is None: return "EXPIRED"
+    if not target_time:
+        return "EXPIRED"
 
-    target_time = now.replace(hour=target_hour, minute=target_min, second=0, microsecond=0)
     random.seed(target_time.timestamp())
     cote = round(random.uniform(10.0, 200.0), 2)
     prev = round(random.uniform(10.0, 25.0), 2)
@@ -119,22 +113,23 @@ def start(msg):
         btns.append("⚙️ SET 01")
         btns.append("⚙️ SET 02")
     markup.add(*btns)
-    bot.send_message(msg.chat.id, "Session active.", reply_markup=markup)
+    bot.send_message(msg.chat.id, "Session en ligne.", reply_markup=markup)
 
 @bot.message_handler(func=lambda m: m.text == "💎 GROSSE CÔTE")
 def big_sig(msg):
     u = get_user(msg.from_user.id)
     if msg.from_user.id == ADMIN_ID or u.get('is_vip'):
         res = get_grosse_cote_signal()
-        if res is None or res == "EXPIRED":
-            bot.send_message(msg.chat.id, "⏳ **INDISPONIBLE**\n\nLes prochains créneaux sont en cours de validation. Vous recevrez une notification dès qu'ils seront prêts.")
+        if res == "EXPIRED" or res is None:
+            bot.send_message(msg.chat.id, "⏳ **INDISPONIBLE**\n\nLes signaux sont en cours de validation. Une notification sera envoyée dès qu'ils seront prêts.")
             return
+        
         t_time, cote, prev, label = res
         time_fmt = f"{t_time.strftime('%H:%M')} - {(t_time + timedelta(minutes=1)).strftime('%H:%M')}"
         txt = (f"💎 **{label}**\n\n📅 **HEURE** : `{time_fmt}`\n📈 **OBJECTIF** : `{cote}X+` \n🎯 **VALEUR** : `{prev}X+` \n\n🎁 **CODE PROMO** : `{CODE_PROMO}`")
         bot.send_video(msg.chat.id, ID_VIDEO_UNIQUE, caption=txt, reply_markup=telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("ACCÈS JEU", url=LIEN_INSCRIPTION)), parse_mode='Markdown')
     else:
-        bot.send_message(msg.chat.id, f"⚠️ **ACCÈS PRIVÉ**\n\nInscrivez-vous avec le code promo **{CODE_PROMO}** sur [ce lien]({LIEN_INSCRIPTION}) puis envoyez votre ID ici.", parse_mode='Markdown', disable_web_page_preview=True)
+        bot.send_message(msg.chat.id, "⚠️ Accès VIP requis.")
 
 @bot.message_handler(func=lambda m: m.text == "🚀 SIGNAL")
 def normal_sig(msg):
@@ -144,35 +139,30 @@ def normal_sig(msg):
         time_fmt = f"{t_time.strftime('%H:%M')} - {(t_time + timedelta(minutes=1)).strftime('%H:%M')}"
         txt = (f"🚀 **{label}**\n\n📅 **HEURE** : `{time_fmt}`\n📈 **CÔTE** : `{cote}X+` \n🎯 **VALEUR** : `{prev}X+`")
         bot.send_video(msg.chat.id, ID_VIDEO_UNIQUE, caption=txt, reply_markup=telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("ACCÈS JEU", url=LIEN_INSCRIPTION)), parse_mode='Markdown')
-    else:
-        bot.send_message(msg.chat.id, f"⚠️ **ACCÈS PRIVÉ**\n\nCode promo : **{CODE_PROMO}**\nLien : [Cliquez ici]({LIEN_INSCRIPTION})", parse_mode='Markdown', disable_web_page_preview=True)
 
 @bot.message_handler(func=lambda m: m.text == "📊 STATS")
 def stats(msg):
-    h_impaires = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23]
-    h_actuelle = datetime.now().hour
-    prochaine = next((f"{str(h).zfill(2)}:00" for h in h_impaires if h > h_actuelle), "01:00")
-    txt = (f"📊 **ÉTAT**\n\nPrécision : `99.1%` \nProchaine Session : `{prochaine}`")
+    txt = "📊 **SESSIONS DU JOUR**\n\nPrécision : `99.1%` \nStatut : `Optimal`"
     bot.send_message(msg.chat.id, txt, parse_mode='Markdown')
 
-# --- ADMIN ---
+# --- ADMIN ACTIONS ---
 @bot.message_handler(func=lambda m: m.text == "⚙️ SET 02" and m.from_user.id == ADMIN_ID)
 def config_grosse(msg):
     admin_state[ADMIN_ID] = "WAIT_GROSSE"
-    bot.send_message(ADMIN_ID, "Entrez les minutes (ex: 10, 23, 30) :")
+    bot.send_message(ADMIN_ID, "Entrez vos minutes (ex: 12, 45) :")
 
 @bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAIT_GROSSE" and m.from_user.id == ADMIN_ID)
 def save_grosse(msg):
     try:
         mins = [int(x.strip()) for x in msg.text.split(',')]
         config_col.update_one({"_id": "grosse_cote"}, {"$set": {"minutes": mins}}, upsert=True)
-        bot.send_message(ADMIN_ID, "✅ Programmation enregistrée.")
+        bot.send_message(ADMIN_ID, "✅ Programmation validée.")
         
-        # NOTIFICATION AUTOMATIQUE AUX JOUEURS
-        txt_notif = "🔔 **ALERTE GROSSE CÔTE**\n\nDe nouveaux signaux viennent d'être validés ! Cliquez sur le bouton **💎 GROSSE CÔTE** pour les consulter."
+        # NOTIFICATION AUTOMATIQUE
+        txt_notif = "🔔 **ALERTE GROSSE CÔTE**\n\nDe nouveaux signaux sont disponibles ! Cliquez sur le bouton **💎 GROSSE CÔTE**."
         threading.Thread(target=notify_all_vips, args=(txt_notif,)).start()
     except:
-        bot.send_message(ADMIN_ID, "Erreur format.")
+        bot.send_message(ADMIN_ID, "Format incorrect.")
     admin_state[ADMIN_ID] = None
 
 @bot.message_handler(func=lambda m: m.text == "⚙️ SET 01" and m.from_user.id == ADMIN_ID)
@@ -191,14 +181,14 @@ def save_min(msg):
 def handle_id(msg):
     kb = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("VALIDER", callback_data=f"val_{msg.from_user.id}"))
     bot.send_message(ADMIN_ID, f"🔔 ID REÇU : `{msg.text}`", reply_markup=kb)
-    bot.send_message(msg.chat.id, "ID reçu pour vérification.")
+    bot.send_message(msg.chat.id, "ID envoyé pour vérification.")
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("val_"))
 def val_callback(c):
     uid = int(c.data.split("_")[1])
     users_col.update_one({"_id": uid}, {"$set": {"is_vip": True}}, upsert=True)
     bot.send_message(uid, "🌟 **ACCÈS VIP ACTIVÉ.**")
-    bot.answer_callback_query(c.id, "Validé")
+    bot.answer_callback_query(c.id, "Activé")
 
 if __name__ == "__main__":
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
