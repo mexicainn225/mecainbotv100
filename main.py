@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Système Mexicain225 - Arret Strict"
+    return "Système Mexicain225 - Labels Mis à Jour"
 
 # --- CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
@@ -26,7 +26,7 @@ ID_VIDEO_UNIQUE = "https://t.me/gagnantpro1xbet/138958"
 
 admin_state = {}
 
-# --- FONCTIONS ---
+# --- FONCTIONS SYSTÈME ---
 def get_user(u_id):
     user = users_col.find_one({"_id": u_id})
     if not user:
@@ -40,7 +40,6 @@ def get_base_minute():
 
 def get_grosse_cote_list():
     conf = config_col.find_one({"_id": "grosse_cote"})
-    # On récupère aussi l'heure à laquelle l'admin a validé pour verrouiller
     return conf if conf else {}
 
 def notify_all_vips(message_text):
@@ -51,44 +50,40 @@ def notify_all_vips(message_text):
         except:
             pass
 
-# --- LOGIQUE SIGNAL 02 @ 10 MIN ---
+# --- LOGIQUE SIGNAL UNIQUE (PRÉDICTION LUCKY JET) ---
 def get_next_single_signal():
     now = datetime.now()
     base_min = get_base_minute()
     total_now = now.hour * 60 + now.minute
     sig_total = base_min
-    while sig_total + 10 <= total_now:
+    
+    while sig_total <= total_now:
         sig_total += 17
-    t_p = now.replace(hour=(sig_total // 60) % 24, minute=sig_total % 60, second=0, microsecond=0)
-    t_r = t_p + timedelta(minutes=10)
-    target_time, label = (t_r, "SIGNAL 02") if total_now >= sig_total else (t_p, "SIGNAL 01")
+    
+    target_time = now.replace(hour=(sig_total // 60) % 24, minute=sig_total % 60, second=0, microsecond=0)
+    
     random.seed(target_time.timestamp())
     cote = round(random.uniform(5.0, 115.0), 2)
     prev = round(random.uniform(5.0, 12.0), 2)
     random.seed()
-    return target_time, cote, prev, label
+    return target_time, cote, prev, "PRÉDICTION LUCKY JET"
 
-# --- LOGIQUE GROSSE CÔTE (VERROUILLAGE STRICT) ---
+# --- LOGIQUE GROSSE CÔTE (SIGNAUX GROSSE COTE) ---
 def get_grosse_cote_signal():
     now = datetime.now()
     conf = get_grosse_cote_list()
     if not conf or 'minutes' not in conf: return None
     
     minutes_list = sorted(conf['minutes'])
-    # L'heure cible est fixée au moment où tu as programmé + 2h
     target_hour = conf.get('target_hour')
     
     target_time = None
     for m in minutes_list:
-        # On ne crée le signal que pour l'heure cible précise
         t_check = now.replace(hour=target_hour, minute=m, second=0, microsecond=0)
-        
-        # SI LA MINUTE EST ENCORE À VENIR (dans l'heure cible)
         if t_check > now:
             target_time = t_check
             break
             
-    # SI TOUTES LES MINUTES DE L'HEURE CIBLE SONT PASSÉES -> STOP
     if not target_time:
         return "EXPIRED"
 
@@ -96,7 +91,7 @@ def get_grosse_cote_signal():
     cote = round(random.uniform(10.0, 200.0), 2)
     prev = round(random.uniform(10.0, 25.0), 2)
     random.seed()
-    return target_time, cote, prev, "CONFIRMÉ 💎"
+    return target_time, cote, prev, "SIGNAUX GROSSE COTE 💎"
 
 # --- HANDLERS ---
 @bot.message_handler(commands=['start'])
@@ -126,27 +121,6 @@ def big_sig(msg):
     else:
         bot.send_message(msg.chat.id, "⚠️ Accès VIP requis.")
 
-@bot.message_handler(func=lambda m: m.text == "⚙️ SET 02" and m.from_user.id == ADMIN_ID)
-def config_grosse(msg):
-    admin_state[ADMIN_ID] = "WAIT_GROSSE"
-    bot.send_message(ADMIN_ID, "Entrez les minutes (ex: 10, 35) :")
-
-@bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAIT_GROSSE" and m.from_user.id == ADMIN_ID)
-def save_grosse(msg):
-    try:
-        mins = [int(x.strip()) for x in msg.text.split(',')]
-        now = datetime.now()
-        # On enregistre l'heure cible (Maintenant + 2h)
-        target_h = (now.hour + 2) % 24
-        config_col.update_one({"_id": "grosse_cote"}, {"$set": {"minutes": mins, "target_hour": target_h}}, upsert=True)
-        bot.send_message(ADMIN_ID, f"✅ Programmation verrouillée pour {target_h}h.")
-        
-        threading.Thread(target=notify_all_vips, args=("🔔 **ALERTE GROSSE CÔTE**\n\nNouveaux signaux validés !",)).start()
-    except:
-        bot.send_message(ADMIN_ID, "Erreur format.")
-    admin_state[ADMIN_ID] = None
-
-# SET 01, SIGNAL, STATS... (Reste du code identique)
 @bot.message_handler(func=lambda m: m.text == "🚀 SIGNAL")
 def normal_sig(msg):
     u = get_user(msg.from_user.id)
@@ -156,16 +130,35 @@ def normal_sig(msg):
         txt = (f"🚀 **{label}**\n\n📅 **HEURE** : `{time_fmt}`\n📈 **CÔTE** : `{cote}X+` \n🎯 **VALEUR** : `{prev}X+`")
         bot.send_video(msg.chat.id, ID_VIDEO_UNIQUE, caption=txt, reply_markup=telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("ACCÈS JEU", url=LIEN_INSCRIPTION)), parse_mode='Markdown')
 
+# --- ADMIN ACTIONS ---
 @bot.message_handler(func=lambda m: m.text == "⚙️ SET 01" and m.from_user.id == ADMIN_ID)
 def config_min(msg):
     admin_state[ADMIN_ID] = "WAIT_MIN"
-    bot.send_message(ADMIN_ID, "Base minute :")
+    bot.send_message(ADMIN_ID, "Base minute (Prédiction Lucky Jet) :")
 
 @bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAIT_MIN" and m.from_user.id == ADMIN_ID)
 def save_min(msg):
     if msg.text.isdigit():
         config_col.update_one({"_id": "settings"}, {"$set": {"minute": int(msg.text)}}, upsert=True)
-        bot.send_message(ADMIN_ID, "OK.")
+        bot.send_message(ADMIN_ID, "✅ Label PRÉDICTION LUCKY JET mis à jour.")
+    admin_state[ADMIN_ID] = None
+
+@bot.message_handler(func=lambda m: m.text == "⚙️ SET 02" and m.from_user.id == ADMIN_ID)
+def config_grosse(msg):
+    admin_state[ADMIN_ID] = "WAIT_GROSSE"
+    bot.send_message(ADMIN_ID, "Minutes SIGNAUX GROSSE COTE (H+2) :")
+
+@bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAIT_GROSSE" and m.from_user.id == ADMIN_ID)
+def save_grosse(msg):
+    try:
+        mins = [int(x.strip()) for x in msg.text.split(',')]
+        now = datetime.now()
+        target_h = (now.hour + 2) % 24
+        config_col.update_one({"_id": "grosse_cote"}, {"$set": {"minutes": mins, "target_hour": target_h}}, upsert=True)
+        bot.send_message(ADMIN_ID, f"✅ Signaux Grosse Cote verrouillés pour {target_h}h.")
+        threading.Thread(target=notify_all_vips, args=("🔔 **ALERTE SIGNAUX GROSSE COTE**\n\nNouveaux signaux validés !",)).start()
+    except:
+        bot.send_message(ADMIN_ID, "Erreur.")
     admin_state[ADMIN_ID] = None
 
 @bot.message_handler(func=lambda m: m.text == "📊 STATS")
