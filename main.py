@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Système Mexicain225 - SIGNAL 02 @ 10min"
+    return "Système Mexicain225 - Verrouillage Total"
 
 # --- CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
@@ -26,7 +26,7 @@ ID_VIDEO_UNIQUE = "https://t.me/gagnantpro1xbet/138958"
 
 admin_state = {}
 
-# --- FONCTIONS SYSTÈME ---
+# --- FONCTIONS ---
 def get_user(u_id):
     user = users_col.find_one({"_id": u_id})
     if not user:
@@ -50,20 +50,18 @@ def notify_all_vips(message_text):
         except:
             pass
 
-# --- LOGIQUE SIGNAL CLASSIQUE (MODIFIÉE : SIGNAL 02 à +10 min) ---
+# --- LOGIQUE SIGNAL 02 @ 10 MIN ---
 def get_next_single_signal():
     now = datetime.now()
     base_min = get_base_minute()
     total_now = now.hour * 60 + now.minute
     sig_total = base_min
     
-    # On cherche le créneau de 17 min
     while sig_total + 10 <= total_now:
         sig_total += 17
     
     t_p = now.replace(hour=(sig_total // 60) % 24, minute=sig_total % 60, second=0, microsecond=0)
-    # CHANGEMENT ICI : SIGNAL 02 est maintenant à +10 minutes
-    t_r = t_p + timedelta(minutes=10)
+    t_r = t_p + timedelta(minutes=10) # FIXÉ À 10 MIN
     
     target_time, label = (t_r, "SIGNAL 02") if total_now >= sig_total else (t_p, "SIGNAL 01")
     
@@ -73,7 +71,7 @@ def get_next_single_signal():
     random.seed()
     return target_time, cote, prev, label
 
-# --- LOGIQUE GROSSE CÔTE (H+1 INTELLIGENT) ---
+# --- LOGIQUE GROSSE CÔTE (VERROU DE 90 MIN) ---
 def get_grosse_cote_signal():
     now = datetime.now()
     minutes_list = get_grosse_cote_list()
@@ -82,20 +80,22 @@ def get_grosse_cote_signal():
     sorted_mins = sorted(minutes_list)
     target_time = None
 
+    # On cherche uniquement dans une fenêtre de temps logique
     for m in sorted_mins:
-        # 1. Test heure actuelle
-        t_actuelle = now.replace(hour=now.hour, minute=m, second=0, microsecond=0)
-        if t_actuelle > now:
-            target_time = t_actuelle
+        # Heure actuelle
+        t_cur = now.replace(hour=now.hour, minute=m, second=0, microsecond=0)
+        if t_cur > now:
+            target_time = t_cur
             break
         
-        # 2. Test heure suivante (H+1)
-        t_suivante = now.replace(hour=(now.hour + 1) % 24, minute=m, second=0, microsecond=0)
-        if t_suivante > now:
-            target_time = t_suivante
+        # Heure suivante
+        t_next = now.replace(hour=(now.hour + 1) % 24, minute=m, second=0, microsecond=0)
+        if t_next > now:
+            target_time = t_next
             break
 
-    # Sécurité arrêt propre
+    # LE VERROU : Si le signal est trouvé mais qu'il est trop loin (> 90 min)
+    # ou s'il n'y a rien : ON COUPE TOUT.
     if not target_time or (target_time - now).total_seconds() > 5400:
         return "EXPIRED"
 
@@ -123,7 +123,7 @@ def big_sig(msg):
     if msg.from_user.id == ADMIN_ID or u.get('is_vip'):
         res = get_grosse_cote_signal()
         if res == "EXPIRED" or res is None:
-            bot.send_message(msg.chat.id, "⏳ **INDISPONIBLE**\n\nLes signaux sont en cours de validation. Vous recevrez une notification dès qu'ils seront prêts.")
+            bot.send_message(msg.chat.id, "⏳ **INDISPONIBLE**\n\nValidation en cours. Vous serez notifié dès que les signaux seront prêts.")
             return
         
         t_time, cote, prev, label = res
@@ -146,7 +146,6 @@ def normal_sig(msg):
 def stats(msg):
     bot.send_message(msg.chat.id, "📊 **SESSIONS**\n\nPrécision : `99.1%` \nStatut : `Optimal`", parse_mode='Markdown')
 
-# --- ADMIN ---
 @bot.message_handler(func=lambda m: m.text == "⚙️ SET 02" and m.from_user.id == ADMIN_ID)
 def config_grosse(msg):
     admin_state[ADMIN_ID] = "WAIT_GROSSE"
@@ -181,7 +180,7 @@ def save_min(msg):
 def handle_id(msg):
     kb = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("VALIDER", callback_data=f"val_{msg.from_user.id}"))
     bot.send_message(ADMIN_ID, f"🔔 ID : `{msg.text}`", reply_markup=kb)
-    bot.send_message(msg.chat.id, "Vérification en cours...")
+    bot.send_message(msg.chat.id, "Vérification...")
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("val_"))
 def val_callback(c):
