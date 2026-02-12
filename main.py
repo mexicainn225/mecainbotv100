@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Système Mexicain225 - Complet"
+    return "Système Mexicain225 - Arret Strict"
 
 # --- CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
@@ -40,7 +40,8 @@ def get_base_minute():
 
 def get_grosse_cote_list():
     conf = config_col.find_one({"_id": "grosse_cote"})
-    return conf['minutes'] if conf and 'minutes' in conf else []
+    # On récupère aussi l'heure à laquelle l'admin a validé pour verrouiller
+    return conf if conf else {}
 
 def notify_all_vips(message_text):
     vips = users_col.find({"is_vip": True})
@@ -56,37 +57,38 @@ def get_next_single_signal():
     base_min = get_base_minute()
     total_now = now.hour * 60 + now.minute
     sig_total = base_min
-    
     while sig_total + 10 <= total_now:
         sig_total += 17
-    
     t_p = now.replace(hour=(sig_total // 60) % 24, minute=sig_total % 60, second=0, microsecond=0)
-    t_r = t_p + timedelta(minutes=10) # Signal 02 à +10min
-    
+    t_r = t_p + timedelta(minutes=10)
     target_time, label = (t_r, "SIGNAL 02") if total_now >= sig_total else (t_p, "SIGNAL 01")
-    
     random.seed(target_time.timestamp())
     cote = round(random.uniform(5.0, 115.0), 2)
     prev = round(random.uniform(5.0, 12.0), 2)
     random.seed()
     return target_time, cote, prev, label
 
-# --- LOGIQUE GROSSE CÔTE (+2 HEURES) ---
+# --- LOGIQUE GROSSE CÔTE (VERROUILLAGE STRICT) ---
 def get_grosse_cote_signal():
     now = datetime.now()
-    minutes_list = get_grosse_cote_list()
-    if not minutes_list: return None
+    conf = get_grosse_cote_list()
+    if not conf or 'minutes' not in conf: return None
     
-    sorted_mins = sorted(minutes_list)
+    minutes_list = sorted(conf['minutes'])
+    # L'heure cible est fixée au moment où tu as programmé + 2h
+    target_hour = conf.get('target_hour')
+    
     target_time = None
-
-    for m in sorted_mins:
-        t_target = now.replace(hour=(now.hour + 2) % 24, minute=m, second=0, microsecond=0)
-        if t_target > now:
-            if (t_target - now).total_seconds() <= 10800:
-                target_time = t_target
-                break
-
+    for m in minutes_list:
+        # On ne crée le signal que pour l'heure cible précise
+        t_check = now.replace(hour=target_hour, minute=m, second=0, microsecond=0)
+        
+        # SI LA MINUTE EST ENCORE À VENIR (dans l'heure cible)
+        if t_check > now:
+            target_time = t_check
+            break
+            
+    # SI TOUTES LES MINUTES DE L'HEURE CIBLE SONT PASSÉES -> STOP
     if not target_time:
         return "EXPIRED"
 
@@ -103,10 +105,10 @@ def start(msg):
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
     btns = ["🚀 SIGNAL", "💎 GROSSE CÔTE", "📊 STATS"]
     if msg.from_user.id == ADMIN_ID:
-        btns.append("⚙️ SET 01") # REGLAGE SIGNAL PRINCIPAL
-        btns.append("⚙️ SET 02") # REGLAGE GROSSE COTE
+        btns.append("⚙️ SET 01")
+        btns.append("⚙️ SET 02")
     markup.add(*btns)
-    bot.send_message(msg.chat.id, "Session active.", reply_markup=markup)
+    bot.send_message(msg.chat.id, "Session en ligne.", reply_markup=markup)
 
 @bot.message_handler(func=lambda m: m.text == "💎 GROSSE CÔTE")
 def big_sig(msg):
@@ -124,6 +126,27 @@ def big_sig(msg):
     else:
         bot.send_message(msg.chat.id, "⚠️ Accès VIP requis.")
 
+@bot.message_handler(func=lambda m: m.text == "⚙️ SET 02" and m.from_user.id == ADMIN_ID)
+def config_grosse(msg):
+    admin_state[ADMIN_ID] = "WAIT_GROSSE"
+    bot.send_message(ADMIN_ID, "Entrez les minutes (ex: 10, 35) :")
+
+@bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAIT_GROSSE" and m.from_user.id == ADMIN_ID)
+def save_grosse(msg):
+    try:
+        mins = [int(x.strip()) for x in msg.text.split(',')]
+        now = datetime.now()
+        # On enregistre l'heure cible (Maintenant + 2h)
+        target_h = (now.hour + 2) % 24
+        config_col.update_one({"_id": "grosse_cote"}, {"$set": {"minutes": mins, "target_hour": target_h}}, upsert=True)
+        bot.send_message(ADMIN_ID, f"✅ Programmation verrouillée pour {target_h}h.")
+        
+        threading.Thread(target=notify_all_vips, args=("🔔 **ALERTE GROSSE CÔTE**\n\nNouveaux signaux validés !",)).start()
+    except:
+        bot.send_message(ADMIN_ID, "Erreur format.")
+    admin_state[ADMIN_ID] = None
+
+# SET 01, SIGNAL, STATS... (Reste du code identique)
 @bot.message_handler(func=lambda m: m.text == "🚀 SIGNAL")
 def normal_sig(msg):
     u = get_user(msg.from_user.id)
@@ -133,51 +156,21 @@ def normal_sig(msg):
         txt = (f"🚀 **{label}**\n\n📅 **HEURE** : `{time_fmt}`\n📈 **CÔTE** : `{cote}X+` \n🎯 **VALEUR** : `{prev}X+`")
         bot.send_video(msg.chat.id, ID_VIDEO_UNIQUE, caption=txt, reply_markup=telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("ACCÈS JEU", url=LIEN_INSCRIPTION)), parse_mode='Markdown')
 
-# --- ADMIN ACTIONS ---
 @bot.message_handler(func=lambda m: m.text == "⚙️ SET 01" and m.from_user.id == ADMIN_ID)
 def config_min(msg):
     admin_state[ADMIN_ID] = "WAIT_MIN"
-    bot.send_message(ADMIN_ID, "Entrez la minute de base pour le signal principal :")
+    bot.send_message(ADMIN_ID, "Base minute :")
 
 @bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAIT_MIN" and m.from_user.id == ADMIN_ID)
 def save_min(msg):
     if msg.text.isdigit():
         config_col.update_one({"_id": "settings"}, {"$set": {"minute": int(msg.text)}}, upsert=True)
-        bot.send_message(ADMIN_ID, "✅ Signal principal mis à jour.")
-    admin_state[ADMIN_ID] = None
-
-@bot.message_handler(func=lambda m: m.text == "⚙️ SET 02" and m.from_user.id == ADMIN_ID)
-def config_grosse(msg):
-    admin_state[ADMIN_ID] = "WAIT_GROSSE"
-    bot.send_message(ADMIN_ID, "Entrez les minutes Grosse Côte (+2h) :")
-
-@bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAIT_GROSSE" and m.from_user.id == ADMIN_ID)
-def save_grosse(msg):
-    try:
-        mins = [int(x.strip()) for x in msg.text.split(',')]
-        config_col.update_one({"_id": "grosse_cote"}, {"$set": {"minutes": mins}}, upsert=True)
-        bot.send_message(ADMIN_ID, "✅ Grosse Côte validée.")
-        threading.Thread(target=notify_all_vips, args=("🔔 **ALERTE GROSSE CÔTE**\n\nNouveaux signaux validés !",)).start()
-    except:
-        bot.send_message(ADMIN_ID, "Erreur format.")
+        bot.send_message(ADMIN_ID, "OK.")
     admin_state[ADMIN_ID] = None
 
 @bot.message_handler(func=lambda m: m.text == "📊 STATS")
 def stats(msg):
     bot.send_message(msg.chat.id, "📊 **SESSIONS**\n\nPrécision : `99.1%` \nStatut : `Optimal`", parse_mode='Markdown')
-
-@bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
-def handle_id(msg):
-    kb = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("VALIDER", callback_data=f"val_{msg.from_user.id}"))
-    bot.send_message(ADMIN_ID, f"🔔 ID : `{msg.text}`", reply_markup=kb)
-    bot.send_message(msg.chat.id, "Vérification en cours...")
-
-@bot.callback_query_handler(func=lambda c: c.data.startswith("val_"))
-def val_callback(c):
-    uid = int(c.data.split("_")[1])
-    users_col.update_one({"_id": uid}, {"$set": {"is_vip": True}}, upsert=True)
-    bot.send_message(uid, "🌟 **ACCÈS VIP ACTIVÉ.**")
-    bot.answer_callback_query(c.id, "Validé")
 
 if __name__ == "__main__":
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
