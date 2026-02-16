@@ -51,8 +51,8 @@ def get_next_signal():
     target_time = now.replace(hour=(sig_total // 60) % 24, minute=sig_total % 60, second=0, microsecond=0)
     
     random.seed(target_time.timestamp())
-    cote = round(random.uniform(2.10, 85.0), 2)
-    prev = round(random.uniform(1.50, 5.20), 2)
+    cote = round(random.uniform(10, 85.0), 2)
+    prev = round(random.uniform(5, 8), 2)
     random.seed()
     return target_time, cote, prev
 
