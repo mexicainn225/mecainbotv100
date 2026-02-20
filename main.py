@@ -46,7 +46,7 @@ def get_next_signal():
     sig_total = base_min
     
     while sig_total <= total_now:
-        sig_total += 25
+        sig_total += 12
     
     target_time = now.replace(hour=(sig_total // 60) % 24, minute=sig_total % 60, second=0, microsecond=0)
     
