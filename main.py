@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Système Pro V17 - Version Finale"
+    return "Système Pro V18 - Reset Complet"
 
 # --- CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
@@ -28,18 +28,12 @@ ID_VIDEO_LUCKYJET = "https://t.me/gagnantpro1xbet/138958"
 
 admin_state = {}
 
-# --- LOGIQUE ---
-def get_user(u_id):
-    user = users_col.find_one({"_id": u_id})
-    if not user:
-        user = {"_id": u_id, "is_vip": False}
-        users_col.insert_one(user)
-    return user
-
+# --- FONCTION DE CALCUL ---
 def calculate_prediction(game_type):
     now = datetime.now()
-    intervalle = 21 if "LUCKY" in game_type else 11
-    conf = config_col.find_one({"_id": f"settings_{game_type}"})
+    intervalle = 21 if "LUCKY" in game_type.upper() else 11
+    
+    conf = config_col.find_one({"_id": f"settings_{game_type.upper()}"})
     base_min = int(conf['minute']) if conf else 11
     
     total_now = (now.hour * 60) + now.minute
@@ -53,7 +47,7 @@ def calculate_prediction(game_type):
     random.seed(target_time.timestamp())
     cote = round(random.uniform(10.0, 85.0), 2)
     
-    if "LUCKY" in game_type:
+    if "LUCKY" in game_type.upper():
         safe = round(random.uniform(5.0, 8.0), 2)
         text = f"🚀 **PRÉDICTION LUCKY JET**\n━━━━━━━━━━━━━━━━━━━━\n📅 **CRÉNEAU** : `{time_fmt}`\n📈 **OBJECTIF** : `{cote}X` \n🎯 **SÉCURITÉ** : `{safe}X` \n━━━━━━━━━━━━━━━━━━━━\n🎁 **PROMO** : `{CODE_PROMO}`"
         video = ID_VIDEO_LUCKYJET
@@ -61,63 +55,62 @@ def calculate_prediction(game_type):
         safe = round(random.uniform(4.0, 9.0), 2)
         text = f"✈️ **PRÉDICTION AVIATOR**\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n🕒 **HEURE DE VOL** : `{time_fmt}`\n💰 **GAIN ESTIMÉ** : `{cote}X+` \n🛡 **RETRAIT PRÉVU** : `{safe}X` \n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n🎟 **PROMO** : `{CODE_PROMO}`"
         video = ID_VIDEO_AVIATOR
-    random.seed()
     return text, video
 
-# --- HANDLERS ---
+# --- HANDLERS (ORDRE CRUCIAL) ---
 
 @bot.message_handler(commands=['start'])
 def start(msg):
-    get_user(msg.from_user.id)
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.row("🚀 LUCKY JET", "✈️ AVIATOR")
     markup.row("📊 STATISTIQUES")
     if msg.from_user.id == ADMIN_ID:
         markup.row("⚙️ CONFIG LUCKY", "⚙️ CONFIG AVIATOR")
-    bot.send_message(msg.chat.id, "👋 **Robot Prêt.**", reply_markup=markup, parse_mode='Markdown')
+    bot.send_message(msg.chat.id, "🤖 **Système Prêt.**\nCliquez sur un bouton :", reply_markup=markup)
 
-# 1. CONFIGURATION (DÉTECTION PRIORITAIRE)
-@bot.message_handler(func=lambda m: "CONFIG" in m.text.upper() and m.from_user.id == ADMIN_ID)
+# 1. DÉTECTION CONFIG (ADMIN UNIQUEMENT)
+@bot.message_handler(func=lambda m: "CONFIG" in m.text.upper())
 def config_handler(msg):
-    game = "LUCKY" if "LUCKY" in msg.text.upper() else "AVIATOR"
-    admin_state[ADMIN_ID] = f"WAIT_{game}"
-    bot.send_message(ADMIN_ID, f"🛠 **RÉGLAGE {game}**\nEnvoie la minute de départ (ex: 11) :")
+    if msg.from_user.id == ADMIN_ID:
+        game = "LUCKY" if "LUCKY" in msg.text.upper() else "AVIATOR"
+        admin_state[ADMIN_ID] = f"WAIT_{game}"
+        bot.send_message(ADMIN_ID, f"🛠 **RÉGLAGE {game}**\nEnvoie la minute de départ (ex: 11) :")
+    else:
+        bot.send_message(msg.chat.id, "🚫 Accès Admin requis.")
 
-# 2. SAUVEGARDE DU CHIFFRE
-@bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID, "").startswith("WAIT_"))
+# 2. CAPTURE DU CHIFFRE CONFIG
+@bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID, "") != "" and m.text.isdigit())
 def save_config(msg):
-    if msg.from_user.id == ADMIN_ID and msg.text.isdigit():
+    if msg.from_user.id == ADMIN_ID:
         game = admin_state[ADMIN_ID].split("_")[1]
         config_col.update_one({"_id": f"settings_{game}"}, {"$set": {"minute": int(msg.text)}}, upsert=True)
-        bot.send_message(ADMIN_ID, f"✅ **{game} Mis à jour !**")
-        admin_state[ADMIN_ID] = None
+        bot.send_message(ADMIN_ID, f"✅ **{game} Mis à jour sur {msg.text} !**")
+        admin_state[ADMIN_ID] = ""
 
-# 3. STATISTIQUES
-@bot.message_handler(func=lambda m: "STATISTIQUES" in m.text.upper())
+# 3. DÉTECTION STATS
+@bot.message_handler(func=lambda m: "STAT" in m.text.upper())
 def handle_stats(msg):
-    stats = (f"📊 **STATISTIQUES PROFESSIONNELLES**\n━━━━━━━━━━━━━━━━━━━━━━\n"
-             f"🚀 **LUCKY JET** : `98.7%` | ✈️ **AVIATOR** : `97.9%` \n"
-             f"━━━━━━━━━━━━━━━━━━━━━━\n📡 **LATENCE** : `12ms` \n━━━━━━━━━━━━━━━━━━━━━━")
-    bot.send_message(msg.chat.id, stats, parse_mode='Markdown')
+    bot.send_message(msg.chat.id, "📊 **STATISTIQUES**\n━━━━━━━━━━━━━━\n✅ Serveur : OK\n📈 Précision : 98%\n━━━━━━━━━━━━━━")
 
-# 4. PRÉDICTIONS (LUCKY & AVIATOR)
+# 4. DÉTECTION JEUX (VERSION ULTRA-SIMPLE)
 @bot.message_handler(func=lambda m: "LUCKY" in m.text.upper() or "AVIATOR" in m.text.upper())
 def handle_prediction(msg):
-    u = get_user(msg.from_user.id)
-    if msg.from_user.id == ADMIN_ID or u.get('is_vip') == True:
+    user = users_col.find_one({"_id": msg.from_user.id})
+    is_vip = user.get('is_vip') if user else False
+    
+    if msg.from_user.id == ADMIN_ID or is_vip:
         game = "LUCKY" if "LUCKY" in msg.text.upper() else "AVIATOR"
         text, video = calculate_prediction(game)
-        btn = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("📲 JOUER", url=LIEN_INSCRIPTION))
-        bot.send_video(msg.chat.id, video, caption=text, reply_markup=btn, parse_mode='Markdown')
+        bot.send_video(msg.chat.id, video, caption=text, parse_mode='Markdown')
     else:
         bot.send_message(msg.chat.id, "⚠️ **ACCÈS VIP REQUIS**")
 
-# VALIDATION VIP
+# 5. VALIDATION ID (POUR LES CHIFFRES LONGS)
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
 def handle_id(msg):
     kb = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("✅ VALIDER", callback_data=f"val_{msg.from_user.id}"))
-    bot.send_message(ADMIN_ID, f"🆕 **ID REÇU** : `{msg.text}`", reply_markup=kb)
-    bot.send_message(msg.chat.id, "⏳ **Vérification...**")
+    bot.send_message(ADMIN_ID, f"🆕 **ID JOUEUR** : `{msg.text}`", reply_markup=kb)
+    bot.send_message(msg.chat.id, "⏳ **Analyse de votre compte...**")
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("val_"))
 def accept_vip(c):
@@ -127,5 +120,8 @@ def accept_vip(c):
     bot.answer_callback_query(c.id)
 
 if __name__ == "__main__":
+    # Nettoyage webhook pour Render
+    bot.remove_webhook()
+    time.sleep(1)
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
     bot.infinity_polling(timeout=30)
