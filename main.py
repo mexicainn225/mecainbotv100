@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Système Multi-Jeux Pro V3 - Opérationnel"
+    return "Système Multi-Jeux Infini - Opérationnel"
 
 # --- CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
@@ -40,10 +40,10 @@ def get_base_min(game):
     try:
         conf = config_col.find_one({"_id": f"settings_{game}"})
         if conf and 'minute' in conf:
-            return conf['minute']
+            return int(conf['minute'])
     except:
         pass
-    return 10 # Valeur de secours pour que ça marche direct
+    return datetime.now().minute # Si vide, commence à la minute actuelle pour ne jamais bloquer
 
 # --- LOGIQUE PRÉDICTIONS ---
 def get_prediction(game_type):
@@ -51,15 +51,15 @@ def get_prediction(game_type):
     base_min = get_base_min(game_type)
     total_now = now.hour * 60 + now.minute
     
+    # Intervalles identiques ou différents selon ton choix
     intervalle = 21 if game_type == "LUCKY" else 13
+    
+    # Calcul du premier signal de la journée basé sur la minute de base
     sig_total = base_min
     
-    # Sécurité pour trouver le prochain créneau sans bloquer
+    # Boucle infinie pour toujours trouver le PROCHAIN signal, peu importe l'heure
     while sig_total <= total_now:
         sig_total += intervalle
-        if sig_total > 2000: # Anti boucle infinie
-            sig_total = total_now + 2
-            break
             
     target_time = now.replace(hour=(sig_total // 60) % 24, minute=sig_total % 60, second=0, microsecond=0)
     
@@ -70,7 +70,7 @@ def get_prediction(game_type):
         label = "PRÉDICTION LUCKY JET"
         video = ID_VIDEO_LUCKYJET
     else:
-        # Aviator : Objectif min 10X / Sécurité min 4X
+        # Aviator : Objectif min 10X / Sécurité min 4X (Variation comme Lucky Jet)
         cote = round(random.uniform(10.0, 85.0), 2)
         prev = round(random.uniform(4.0, 9.0), 2)
         label = "PRÉDICTION AVIATOR"
@@ -132,7 +132,6 @@ def save_config(msg):
         bot.send_message(ADMIN_ID, f"✅ **{game} SYNCHRONISÉ**")
         admin_state[ADMIN_ID] = None
 
-# --- STATISTIQUES PROFESSIONNELLES ---
 @bot.message_handler(func=lambda m: m.text == "📊 STATISTIQUES")
 def stats_handler(msg):
     stats_pro = (
