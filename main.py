@@ -1,4 +1,4 @@
-import telebot, random, os, threading, time
+Import telebot, random, os, threading, time
 from datetime import datetime, timedelta
 from flask import Flask
 from pymongo import MongoClient
@@ -77,11 +77,11 @@ def signal_handler(msg):
         caption = (
             f"🚀 **PRÉDICTION LUCKY JET**\n"
             f"━━━━━━━━━━━━━━━━━━\n"
-            f"📅 CRÉNEAU : `{time_fmt}`\n"
-            f"📈 OBJECTIF : {cote}X \n"
-            f"🎯 SÉCURITÉ : {prev}X \n"
+            f"📅 **CRÉNEAU** : `{time_fmt}`\n"
+            f"📈 **OBJECTIF** : `{cote}X` \n"
+            f"🎯 **SÉCURITÉ** : `{prev}X` \n"
             f"━━━━━━━━━━━━━━━━━━\n"
-            f"🎁 CODE PROMO : `{CODE_PROMO}`"
+            f"🎁 **CODE PROMO** : `{CODE_PROMO}`"
         )
         
         btn = telebot.types.InlineKeyboardMarkup().add(
@@ -100,11 +100,11 @@ def stats_handler(msg):
     stats_text = (
         f"📊 **RAPPORT DE PERFORMANCE**\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"✅ Taux de Succès : 98.4% \n"
-        f"📡 Statut Serveur : Opérationnel \n"
-        f"⏱ Latence : 24ms \n"
-        f"👥 Membres Actifs : {total_users} \n"
-        f"🏆 Membres VIP : {vips} \n"
+        f"✅ **Taux de Succès** : `98.4%` \n"
+        f"📡 **Statut Serveur** : `Opérationnel` \n"
+        f"⏱ **Latence** : `24ms` \n"
+        f"👥 **Membres Actifs** : `{total_users}` \n"
+        f"🏆 **Membres VIP** : `{vips}` \n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"🔄 *Dernière mise à jour : {datetime.now().strftime('%H:%M:%S')}*"
     )
@@ -139,6 +139,6 @@ def accept_vip(c):
     bot.send_message(uid, "🌟 **FÉLICITATIONS !**\nVotre accès VIP a été activé. Vous pouvez maintenant utiliser les signaux.")
     bot.answer_callback_query(c.id, "Utilisateur validé")
 
-if name == "__main__":
+if __name__ == "__main__":
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
     bot.infinity_polling(timeout=20)
