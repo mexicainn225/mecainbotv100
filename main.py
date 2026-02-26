@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Système Lucky Jet Pro - Fix ID OK"
+    return "Système Lucky Jet Pro - Logique 5 OK"
 
 # --- CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
@@ -21,7 +21,6 @@ users_col = db['users']
 config_col = db['config']
 
 LIEN_INSCRIPTION = "https://lkbb.cc/e2d8"
-CODE_PROMO = "COK225"
 ID_VIDEO_UNIQUE = "https://t.me/gagnantpro1xbet/138958" 
 
 admin_state = {}
@@ -36,7 +35,7 @@ def get_user(u_id):
 
 def get_base_minute():
     conf = config_col.find_one({"_id": "settings"})
-    return conf['minute'] if conf else 46 
+    return conf['minute'] if conf else 39 
 
 def get_next_signal():
     now = datetime.now()
@@ -44,14 +43,14 @@ def get_next_signal():
     total_now = now.hour * 60 + now.minute
     sig_total = base_min
     
-    # Calcul avec intervalle de 39
+    # Intervalle de 39
     while sig_total <= total_now:
         sig_total += 39
         
     target_hour = (sig_total // 60) % 24
     target_minute = sig_total % 60
     
-    # --- LOGIQUE D'ARRONDI SUR LE CHIFFRE 5 ---
+    # --- LOGIQUE D'ARRONDI VERS LE "5" SUPÉRIEUR ---
     last_digit = target_minute % 10
     tens = (target_minute // 10) * 10 
 
@@ -59,17 +58,13 @@ def get_next_signal():
         # Ex: 01, 02, 03, 04 -> devient 05
         target_minute = tens + 5
     else:
-        # Ex: 06, 07, 08, 09 -> devient dizaine + 5 (ex: 39 -> 35)
-        # Mais si c'est entre 06 et 09 -> devient 15 (selon ta règle)
-        if tens == 0:
-            target_minute = 15
-        else:
-            target_minute = tens + 5
+        # Ex: 06, 07, 08, 09 -> saute à la dizaine suivante + 5 (ex: 39 -> 45)
+        target_minute = tens + 15
             
     # Correction si dépassement 59 min
     if target_minute >= 60:
         target_hour = (target_hour + 1) % 24
-        target_minute = 5 # On repart sur le premier palier 05
+        target_minute = target_minute - 60
 
     target_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
     
@@ -88,7 +83,7 @@ def start(msg):
     if msg.from_user.id == ADMIN_ID:
         btns.append("⚙️ CONFIGURATION")
     markup.add(*btns)
-    bot.send_message(msg.chat.id, "🛰 **Système de Prédiction Connecté**", reply_markup=markup, parse_mode='Markdown')
+    bot.send_message(msg.chat.id, "🛰 **Système Lucky Jet Connecté**", reply_markup=markup, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "🚀 SIGNAL")
 def signal_handler(msg):
@@ -100,40 +95,39 @@ def signal_handler(msg):
         btn = telebot.types.InlineKeyboardMarkup().add(telebot.types.InlineKeyboardButton("💻 JOUER", url=LIEN_INSCRIPTION))
         bot.send_video(msg.chat.id, ID_VIDEO_UNIQUE, caption=caption, reply_markup=btn, parse_mode='Markdown')
     else:
-        bot.send_message(msg.chat.id, "⚠️ **ACCÈS VIP REQUIS**\nEnvoyez votre ID d'inscription pour activation.")
+        bot.send_message(msg.chat.id, "⚠️ **ACCÈS VIP REQUIS**\nEnvoyez votre ID joueur pour activation.")
 
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
 def handle_id_sent(msg):
-    bot.send_message(msg.chat.id, "⏳ **ID reçu !** Transmission à l'administrateur...")
+    bot.send_message(msg.chat.id, "⏳ **Analyse de l'ID en cours...**")
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(telebot.types.InlineKeyboardButton("✅ ACTIVER VIP", callback_data=f"val_{msg.from_user.id}"))
-    bot.send_message(ADMIN_ID, f"🆕 **NOUVEL ID**\n🆔 ID Joueur : `{msg.text}`\n🔑 Telegram ID : `{msg.from_user.id}`", reply_markup=markup, parse_mode='Markdown')
+    bot.send_message(ADMIN_ID, f"🆕 **NOUVEL ID**\n🆔 ID Joueur : `{msg.text}`\n🔑 User ID : `{msg.from_user.id}`", reply_markup=markup, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "📊 STATISTIQUES")
 def stats_handler(msg):
     total_users = users_col.count_documents({})
-    vips = users_col.count_documents({"is_vip": True})
-    stats_text = (f"📊 **RAPPORT**\n✅ Succès : `98.4%` \n👥 Membres : `{total_users}` \n🏆 VIP : `{vips}`")
+    stats_text = (f"📊 **RAPPORT**\n✅ Succès : `98.4%` \n👥 Utilisateurs : `{total_users}`")
     bot.send_message(msg.chat.id, stats_text, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "⚙️ CONFIGURATION" and m.from_user.id == ADMIN_ID)
 def config_admin(msg):
     admin_state[ADMIN_ID] = "WAIT_BASE"
-    bot.send_message(ADMIN_ID, "🛠 Entrez la minute de base :")
+    bot.send_message(ADMIN_ID, "🛠 Entrez la minute de départ :")
 
 @bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAIT_BASE" and m.from_user.id == ADMIN_ID)
 def save_config(msg):
     if msg.text.isdigit():
         config_col.update_one({"_id": "settings"}, {"$set": {"minute": int(msg.text)}}, upsert=True)
-        bot.send_message(ADMIN_ID, "✅ **SYNCHRO OK**")
+        bot.send_message(ADMIN_ID, "✅ **Réglage enregistré**")
     admin_state[ADMIN_ID] = None
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("val_"))
 def accept_vip(c):
     uid = int(c.data.split("_")[1])
     users_col.update_one({"_id": uid}, {"$set": {"is_vip": True}}, upsert=True)
-    bot.send_message(uid, "🌟 **FÉLICITATIONS !**\nVotre accès VIP est activé.")
-    bot.answer_callback_query(c.id, "Utilisateur validé")
+    bot.send_message(uid, "🌟 **ACCÈS VIP ACTIVÉ !**")
+    bot.answer_callback_query(c.id, "Validé")
 
 if __name__ == "__main__":
     bot.remove_webhook()
