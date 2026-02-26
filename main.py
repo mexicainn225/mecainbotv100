@@ -43,9 +43,36 @@ def get_next_signal():
     base_min = get_base_minute()
     total_now = now.hour * 60 + now.minute
     sig_total = base_min
+    
+    # Calcul avec intervalle de 39
     while sig_total <= total_now:
         sig_total += 39
-    target_time = now.replace(hour=(sig_total // 60) % 24, minute=sig_total % 60, second=0, microsecond=0)
+        
+    target_hour = (sig_total // 60) % 24
+    target_minute = sig_total % 60
+    
+    # --- LOGIQUE D'ARRONDI SUR LE CHIFFRE 5 ---
+    last_digit = target_minute % 10
+    tens = (target_minute // 10) * 10 
+
+    if last_digit < 5:
+        # Ex: 01, 02, 03, 04 -> devient 05
+        target_minute = tens + 5
+    else:
+        # Ex: 06, 07, 08, 09 -> devient dizaine + 5 (ex: 39 -> 35)
+        # Mais si c'est entre 06 et 09 -> devient 15 (selon ta règle)
+        if tens == 0:
+            target_minute = 15
+        else:
+            target_minute = tens + 5
+            
+    # Correction si dépassement 59 min
+    if target_minute >= 60:
+        target_hour = (target_hour + 1) % 24
+        target_minute = 5 # On repart sur le premier palier 05
+
+    target_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
+    
     random.seed(target_time.timestamp())
     cote = round(random.uniform(10.0, 85.0), 2)
     prev = round(random.uniform(5.0, 8.0), 2)
@@ -75,17 +102,12 @@ def signal_handler(msg):
     else:
         bot.send_message(msg.chat.id, "⚠️ **ACCÈS VIP REQUIS**\nEnvoyez votre ID d'inscription pour activation.")
 
-# --- LA FONCTION QUI MANQUAIT : RÉCEPTION DE L'ID ---
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
 def handle_id_sent(msg):
-    # 1. On prévient l'utilisateur
-    bot.send_message(msg.chat.id, "⏳ **ID reçu !** Transmission à l'administrateur pour vérification...")
-    
-    # 2. On envoie l'ID à l'ADMIN avec le bouton de validation
+    bot.send_message(msg.chat.id, "⏳ **ID reçu !** Transmission à l'administrateur...")
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(telebot.types.InlineKeyboardButton("✅ ACTIVER VIP", callback_data=f"val_{msg.from_user.id}"))
-    
-    bot.send_message(ADMIN_ID, f"🆕 **NOUVEL ID À VALIDER**\n\n👤 Utilisateur : `{msg.from_user.first_name}`\n🆔 ID Joueur : `{msg.text}`\n🔑 Telegram ID : `{msg.from_user.id}`", reply_markup=markup, parse_mode='Markdown')
+    bot.send_message(ADMIN_ID, f"🆕 **NOUVEL ID**\n🆔 ID Joueur : `{msg.text}`\n🔑 Telegram ID : `{msg.from_user.id}`", reply_markup=markup, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "📊 STATISTIQUES")
 def stats_handler(msg):
@@ -94,7 +116,6 @@ def stats_handler(msg):
     stats_text = (f"📊 **RAPPORT**\n✅ Succès : `98.4%` \n👥 Membres : `{total_users}` \n🏆 VIP : `{vips}`")
     bot.send_message(msg.chat.id, stats_text, parse_mode='Markdown')
 
-# --- ADMIN CONFIG ---
 @bot.message_handler(func=lambda m: m.text == "⚙️ CONFIGURATION" and m.from_user.id == ADMIN_ID)
 def config_admin(msg):
     admin_state[ADMIN_ID] = "WAIT_BASE"
@@ -115,7 +136,7 @@ def accept_vip(c):
     bot.answer_callback_query(c.id, "Utilisateur validé")
 
 if __name__ == "__main__":
-    bot.remove_webhook() # Nettoyage pour éviter les bugs
+    bot.remove_webhook()
     time.sleep(1)
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
     bot.infinity_polling(timeout=20)
