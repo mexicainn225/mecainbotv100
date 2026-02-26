@@ -44,7 +44,7 @@ def get_next_signal():
     total_now = now.hour * 60 + now.minute
     sig_total = base_min
     while sig_total <= total_now:
-        sig_total += 21
+        sig_total += 39
     target_time = now.replace(hour=(sig_total // 60) % 24, minute=sig_total % 60, second=0, microsecond=0)
     random.seed(target_time.timestamp())
     cote = round(random.uniform(10.0, 85.0), 2)
