@@ -47,7 +47,7 @@ def get_next_signal():
     # 1. Calcul de l'intervalle de +21 minutes (Logique de 21 min appliquée)
     sig_total = base_min
     while sig_total <= total_now:
-        sig_total += 17
+        sig_total += 34
         
     target_hour = (sig_total // 60) % 24
     target_minute = sig_total % 60
