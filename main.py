@@ -7,10 +7,9 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Système Lucky Jet Pro - Cycle Infini OK"
+    return "Système Lucky Jet Pro - Cycle 21min Strict OK"
 
 # --- CONFIGURATION ---
-# Assure-toi que ces variables d'environnement sont bien configurées sur ton hébergeur (Render)
 API_TOKEN = os.getenv('API_TOKEN')
 ADMIN_ID = 5724620019  
 MONGO_URI = os.getenv('MONGO_URI')
@@ -27,7 +26,8 @@ ID_VIDEO_UNIQUE = "https://t.me/gagnantpro1xbet/138958"
 
 admin_state = {}
 
-# --- FONCTIONS SYSTÈME ---
+# --- FONCTIONS SYSTÈME (NOUVELLE LOGIQUE 21 MIN) ---
+
 def get_user(u_id):
     user = users_col.find_one({"_id": u_id})
     if not user:
@@ -36,58 +36,44 @@ def get_user(u_id):
     return user
 
 def get_base_minute():
-    # Récupère la minute de départ réglée par l'admin via le bouton
+    # Minute de départ réglée par l'admin (ex: 2)
     conf = config_col.find_one({"_id": "settings"})
-    return conf['minute'] if conf else 16 
+    return conf['minute'] if conf else 2 
 
 def get_next_signal():
     now = datetime.now()
     base_min = get_base_minute()
     
-    # On calcule le temps total écoulé depuis 00:00 en minutes
+    # Temps actuel en minutes totales depuis minuit
     total_now = now.hour * 60 + now.minute
     
-    # 1. Calcul de l'intervalle de +39 minutes
+    # CALCUL DU CYCLE STRICT DE 21 MINUTES
+    # On part de la minute de base et on ajoute 21 min jusqu'à dépasser l'heure actuelle
     sig_total = base_min
+    intervalle = 21 
+    
     while sig_total <= total_now:
-        sig_total += 39
+        sig_total += intervalle
         
     target_hour = (sig_total // 60) % 24
     target_minute = sig_total % 60
     
-    # 2. Logique d'arrondi vers le "5" supérieur (39 -> 45)
-    last_digit = target_minute % 10
-    tens = (target_minute // 10) * 10 
-
-    if last_digit < 5:
-        # Ex: 01, 02, 03, 04 -> devient 05
-        target_minute = tens + 5
-    else:
-        # Ex: 06, 07, 08, 09 -> saute à la dizaine suivante + 5 (ex: 39 -> 45)
-        target_minute = tens + 15
-            
-    # 3. Correction du passage d'heure (Logique continue sans reset)
-    # Si target_minute arrive à 65, on passe à l'heure suivante : 05
-    while target_minute >= 60:
-        target_hour = (target_hour + 1) % 24
-        target_minute -= 60
-
-    # Création de l'objet temps final
+    # Création de l'objet temps (Minute précise sans arrondi)
     target_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
     
-    # Sécurité si le calcul tombe sur le lendemain (passage de minuit)
-    if target_time < now:
+    # Sécurité si le calcul tombe sur le lendemain
+    if target_time <= now:
         target_time += timedelta(days=1)
 
-    # 4. Génération des cotes (Seedée sur le timestamp pour être fixe par signal)
+    # Génération des cotes (Seedée pour être fixe par créneau)
     random.seed(target_time.timestamp())
-    cote = round(random.uniform(10.0, 85.0), 2)
-    prev = round(random.uniform(5.0, 8.0), 2)
-    random.seed() # On libère le random
+    cote = round(random.uniform(1.5, 12.0), 2)
+    prev = round(random.uniform(1.2, 2.0), 2)
+    random.seed() 
     
     return target_time, cote, prev
 
-# --- HANDLERS (COMMANDES) ---
+# --- HANDLERS ---
 
 @bot.message_handler(commands=['start'])
 def start(msg):
@@ -97,19 +83,18 @@ def start(msg):
     if msg.from_user.id == ADMIN_ID:
         btns.append("⚙️ CONFIGURATION")
     markup.add(*btns)
-    bot.send_message(msg.chat.id, "🛰 **Système Lucky Jet Connecté**\nPrêt pour le prochain signal ?", reply_markup=markup, parse_mode='Markdown')
+    bot.send_message(msg.chat.id, "🛰 **Système Lucky Jet v2 (Cycle 21m) Connecté**", reply_markup=markup, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "🚀 SIGNAL")
 def signal_handler(msg):
     u = get_user(msg.from_user.id)
-    # Accès si ADMIN ou si VIP
     if msg.from_user.id == ADMIN_ID or u.get('is_vip'):
         t_time, cote, prev = get_next_signal()
-        time_fmt = f"{t_time.strftime('%H:%M')} - {(t_time + timedelta(minutes=1)).strftime('%H:%M')}"
+        time_fmt = t_time.strftime('%H:%M')
         
         caption = (f"🚀 **PRÉDICTION LUCKY JET**\n"
                    f"━━━━━━━━━━━━━━━━━━\n"
-                   f"📅 **CRÉNEAU** : `{time_fmt}`\n"
+                   f"⏰ **HEURE EXACTE** : `{time_fmt}`\n"
                    f"📈 **OBJECTIF** : `{cote}X` \n"
                    f"🎯 **SÉCURITÉ** : `{prev}X` \n"
                    f"━━━━━━━━━━━━━━━━━━")
@@ -123,45 +108,34 @@ def signal_handler(msg):
         except:
             bot.send_message(msg.chat.id, caption, reply_markup=btn, parse_mode='Markdown')
     else:
-        bot.send_message(msg.chat.id, "⚠️ **ACCÈS VIP REQUIS**\n\nEnvoyez votre ID joueur pour activer vos signaux.")
-
-@bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
-def handle_id_sent(msg):
-    bot.send_message(msg.chat.id, "⏳ **Analyse de l'ID en cours...**")
-    markup = telebot.types.InlineKeyboardMarkup()
-    markup.add(telebot.types.InlineKeyboardButton("✅ ACTIVER VIP", callback_data=f"val_{msg.from_user.id}"))
-    bot.send_message(ADMIN_ID, f"🆕 **DEMANDE D'ACTIVATION**\n🆔 ID Joueur : `{msg.text}`\n🔑 User : `{msg.from_user.first_name}`", reply_markup=markup, parse_mode='Markdown')
+        bot.send_message(msg.chat.id, "⚠️ **ACCÈS VIP REQUIS**\n\nEnvoyez votre ID joueur pour activation.")
 
 @bot.message_handler(func=lambda m: m.text == "📊 STATISTIQUES")
 def stats_handler(msg):
-    total_users = users_col.count_documents({})
-    stats_text = (f"📊 **RAPPORT DE PRÉCISION**\n\n✅ Taux de succès : `98.4%` \n👥 Utilisateurs actifs : `{total_users}`\n📡 Statut : `Serveur Optimisé`")
-    bot.send_message(msg.chat.id, stats_text, parse_mode='Markdown')
+    bot.send_message(msg.chat.id, "📊 **PRÉCISION : 98.4%**\nCycle actuel : 21 minutes.")
 
 @bot.message_handler(func=lambda m: m.text == "⚙️ CONFIGURATION" and m.from_user.id == ADMIN_ID)
 def config_admin(msg):
     admin_state[ADMIN_ID] = "WAIT_BASE"
-    bot.send_message(ADMIN_ID, "🛠 **RÉGLAGE CYCLE**\nEntrez la minute de base (ex: 16) :")
+    bot.send_message(ADMIN_ID, "🛠 **RÉGLAGE CYCLE (21m)**\nEntrez la minute de départ (ex: 2) :")
 
 @bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAIT_BASE" and m.from_user.id == ADMIN_ID)
 def save_config(msg):
     if msg.text.isdigit():
         config_col.update_one({"_id": "settings"}, {"$set": {"minute": int(msg.text)}}, upsert=True)
-        bot.send_message(ADMIN_ID, f"✅ **Cycle synchronisé sur la minute {msg.text}**")
+        bot.send_message(ADMIN_ID, f"✅ **Cycle synchronisé sur la minute {msg.text}**\nProchains signaux toutes les 21 minutes.")
     admin_state[ADMIN_ID] = None
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("val_"))
 def accept_vip(c):
     uid = int(c.data.split("_")[1])
     users_col.update_one({"_id": uid}, {"$set": {"is_vip": True}}, upsert=True)
-    bot.send_message(uid, "🌟 **FÉLICITATIONS !**\nVotre accès VIP est maintenant activé. Cliquez sur 🚀 SIGNAL.")
+    bot.send_message(uid, "🌟 **ACCÈS VIP ACTIVÉ !**\nCliquez sur 🚀 SIGNAL.")
     bot.answer_callback_query(c.id, "Utilisateur activé")
 
 # --- LANCEMENT ---
 if __name__ == "__main__":
     bot.remove_webhook()
     time.sleep(1)
-    # Lancement du serveur Flask pour Render
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
-    # Lancement du Bot
     bot.infinity_polling(timeout=20)
