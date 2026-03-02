@@ -46,7 +46,7 @@ def get_next_signal():
     # Intervalle de 21 minutes
     sig_total = base_min
     while sig_total <= total_now:
-        sig_total += 21
+        sig_total += 46
         
     target_hour = (sig_total // 60) % 24
     target_minute = sig_total % 60
@@ -88,13 +88,18 @@ def signal_handler(msg):
         # Calcul du rappel (+8 minutes)
         rappel_time = t_time + timedelta(minutes=8)
         
-        time_main = f"{t_time.strftime('%H:%M')}"
-        time_rappel = f"{rappel_time.strftime('%H:%M')}"
+        # Intervalles pour le signal principal
+        main_start = t_time.strftime('%H:%M')
+        main_end = (t_time + timedelta(minutes=1)).strftime('%H:%M')
+        
+        # Intervalles pour le rattrapage (+8 min)
+        rappel_start = rappel_time.strftime('%H:%M')
+        rappel_end = (rappel_time + timedelta(minutes=1)).strftime('%H:%M')
         
         caption = (f"🚀 **PRÉDICTION LUCKY JET**\n"
                    f"━━━━━━━━━━━━━━━━━━\n"
-                   f"📍 **SIGNAL PRINCIPAL** : `{time_main}`\n"
-                   f"⚠️ **RAPPEL (SI PERTE)** : `{time_rappel}`\n"
+                   f"📍 **SIGNAL** : `{main_start} À {main_end}`\n"
+                   f"⚠️ **RATTRAPAGE** : `{rappel_start} À {rappel_end}`\n"
                    f"━━━━━━━━━━━━━━━━━━\n"
                    f"📈 **OBJECTIF** : `{cote}X` \n"
                    f"🎯 **SÉCURITÉ** : `{prev}X` \n"
