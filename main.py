@@ -15,7 +15,6 @@ ADMIN_ID = 5724620019
 MONGO_URI = os.getenv('MONGO_URI')
 bot = telebot.TeleBot(API_TOKEN)
 
-# Connexion MongoDB
 client = MongoClient(MONGO_URI)
 db = client['luckyjet_db']
 users_col = db['users'] 
@@ -44,28 +43,23 @@ def get_next_signal():
     
     total_now = now.hour * 60 + now.minute
     
-    # 1. Calcul de l'intervalle de +21 minutes (Logique de 21 min appliquée)
+    # Intervalle de 21 minutes
     sig_total = base_min
     while sig_total <= total_now:
-        sig_total += 34
+        sig_total += 21
         
     target_hour = (sig_total // 60) % 24
     target_minute = sig_total % 60
     
-    # --- LOGIQUE DE 5 SUPPRIMÉE ICI ---
-            
-    # 2. Correction du passage d'heure
     while target_minute >= 60:
         target_hour = (target_hour + 1) % 24
         target_minute -= 60
 
-    # Création de l'objet temps final à la minute exacte
     target_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
     
     if target_time < now:
         target_time += timedelta(days=1)
 
-    # 3. Génération des cotes (Maintien des paramètres d'origine)
     random.seed(target_time.timestamp())
     cote = round(random.uniform(10.0, 85.0), 2)
     prev = round(random.uniform(5.0, 8.0), 2)
@@ -83,18 +77,25 @@ def start(msg):
     if msg.from_user.id == ADMIN_ID:
         btns.append("⚙️ CONFIGURATION")
     markup.add(*btns)
-    bot.send_message(msg.chat.id, "🛰 **Système Lucky Jet Connecté**\nPrêt pour le prochain signal ?", reply_markup=markup, parse_mode='Markdown')
+    bot.send_message(msg.chat.id, "🛰 **Système Lucky Jet Connecté**", reply_markup=markup, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "🚀 SIGNAL")
 def signal_handler(msg):
     u = get_user(msg.from_user.id)
     if msg.from_user.id == ADMIN_ID or u.get('is_vip'):
         t_time, cote, prev = get_next_signal()
-        time_fmt = f"{t_time.strftime('%H:%M')} - {(t_time + timedelta(minutes=1)).strftime('%H:%M')}"
+        
+        # Calcul du rappel (+8 minutes)
+        rappel_time = t_time + timedelta(minutes=8)
+        
+        time_main = f"{t_time.strftime('%H:%M')}"
+        time_rappel = f"{rappel_time.strftime('%H:%M')}"
         
         caption = (f"🚀 **PRÉDICTION LUCKY JET**\n"
                    f"━━━━━━━━━━━━━━━━━━\n"
-                   f"📅 **CRÉNEAU** : `{time_fmt}`\n"
+                   f"📍 **SIGNAL PRINCIPAL** : `{time_main}`\n"
+                   f"⚠️ **RAPPEL (SI PERTE)** : `{time_rappel}`\n"
+                   f"━━━━━━━━━━━━━━━━━━\n"
                    f"📈 **OBJECTIF** : `{cote}X` \n"
                    f"🎯 **SÉCURITÉ** : `{prev}X` \n"
                    f"━━━━━━━━━━━━━━━━━━")
@@ -108,25 +109,25 @@ def signal_handler(msg):
         except:
             bot.send_message(msg.chat.id, caption, reply_markup=btn, parse_mode='Markdown')
     else:
-        bot.send_message(msg.chat.id, "⚠️ **ACCÈS VIP REQUIS**\n\nEnvoyez votre ID joueur pour activer vos signaux.")
+        bot.send_message(msg.chat.id, "⚠️ **ACCÈS VIP REQUIS**")
 
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
 def handle_id_sent(msg):
     bot.send_message(msg.chat.id, "⏳ **Analyse de l'ID en cours...**")
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(telebot.types.InlineKeyboardButton("✅ ACTIVER VIP", callback_data=f"val_{msg.from_user.id}"))
-    bot.send_message(ADMIN_ID, f"🆕 **DEMANDE D'ACTIVATION**\n🆔 ID Joueur : `{msg.text}`\n🔑 User : `{msg.from_user.first_name}`", reply_markup=markup, parse_mode='Markdown')
+    bot.send_message(ADMIN_ID, f"🆕 **DEMANDE D'ACTIVATION**\n🆔 ID Joueur : `{msg.text}`", reply_markup=markup, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "📊 STATISTIQUES")
 def stats_handler(msg):
     total_users = users_col.count_documents({})
-    stats_text = (f"📊 **RAPPORT DE PRÉCISION**\n\n✅ Taux de succès : `98.4%` \n👥 Utilisateurs actifs : `{total_users}`\n📡 Statut : `Serveur Optimisé`")
+    stats_text = (f"📊 **RAPPORT DE PRÉCISION**\n\n✅ Taux de succès : `98.4%` \n👥 Utilisateurs actifs : `{total_users}`")
     bot.send_message(msg.chat.id, stats_text, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "⚙️ CONFIGURATION" and m.from_user.id == ADMIN_ID)
 def config_admin(msg):
     admin_state[ADMIN_ID] = "WAIT_BASE"
-    bot.send_message(ADMIN_ID, "🛠 **RÉGLAGE CYCLE**\nEntrez la minute de base (ex: 16) :")
+    bot.send_message(ADMIN_ID, "🛠 **RÉGLAGE CYCLE**\nEntrez la minute de base :")
 
 @bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAIT_BASE" and m.from_user.id == ADMIN_ID)
 def save_config(msg):
@@ -139,8 +140,8 @@ def save_config(msg):
 def accept_vip(c):
     uid = int(c.data.split("_")[1])
     users_col.update_one({"_id": uid}, {"$set": {"is_vip": True}}, upsert=True)
-    bot.send_message(uid, "🌟 **FÉLICITATIONS !**\nVotre accès VIP est maintenant activé. Cliquez sur 🚀 SIGNAL.")
-    bot.answer_callback_query(c.id, "Utilisateur activé")
+    bot.send_message(uid, "🌟 **FÉLICITATIONS !**\nVIP activé.")
+    bot.answer_callback_query(c.id, "Activé")
 
 if __name__ == "__main__":
     bot.remove_webhook()
