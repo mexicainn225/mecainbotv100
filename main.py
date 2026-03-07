@@ -86,7 +86,7 @@ def signal_handler(msg):
         t_time, cote, prev = get_next_signal()
         
         # Calcul du rappel (+8 minutes)
-        rappel_time = t_time + timedelta(minutes=13)
+        rappel_time = t_time + timedelta(minutes=12)
         
         # Intervalles pour le signal principal
         main_start = t_time.strftime('%H:%M')
