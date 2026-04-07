@@ -46,7 +46,7 @@ def get_next_signal():
     # Intervalle de 21 minutes
     sig_total = base_min
     while sig_total <= total_now:
-        sig_total += 10
+        sig_total +=10
         
     target_hour = (sig_total // 60) % 24
     target_minute = sig_total % 60
