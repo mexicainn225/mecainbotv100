@@ -43,7 +43,6 @@ def get_next_signal():
     
     total_now = now.hour * 60 + now.minute
     
-    # Intervalle de 21 minutes
     sig_total = base_min
     while sig_total <= total_now:
         sig_total += 10
@@ -51,6 +50,7 @@ def get_next_signal():
     target_hour = (sig_total // 60) % 24
     target_minute = sig_total % 60
     
+    # On évite les erreurs de dépassement de minutes
     while target_minute >= 60:
         target_hour = (target_hour + 1) % 24
         target_minute -= 60
@@ -85,14 +85,11 @@ def signal_handler(msg):
     if msg.from_user.id == ADMIN_ID or u.get('is_vip'):
         t_time, cote, prev = get_next_signal()
         
-        # Calcul du rappel (+8 minutes)
         rappel_time = t_time + timedelta(minutes=4)
         
-        # Intervalles pour le signal principal
         main_start = t_time.strftime('%H:%M')
         main_end = (t_time + timedelta(minutes=1)).strftime('%H:%M')
         
-        # Intervalles pour le rattrapage (+8 min)
         rappel_start = rappel_time.strftime('%H:%M')
         rappel_end = (rappel_time + timedelta(minutes=1)).strftime('%H:%M')
         
@@ -148,8 +145,16 @@ def accept_vip(c):
     bot.send_message(uid, "🌟 **FÉLICITATIONS !**\nVIP activé.")
     bot.answer_callback_query(c.id, "Activé")
 
+# --- CORRECTION FINALE POUR RENDER ---
 if __name__ == "__main__":
     bot.remove_webhook()
     time.sleep(1)
-    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))), daemon=True).start()
+    
+    # Render utilise un port dynamique, il faut le récupérer
+    render_port = int(os.environ.get("PORT", 10000))
+    
+    # On lance Flask dans un thread séparé
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=render_port), daemon=True).start()
+    
+    # On lance le bot
     bot.infinity_polling(timeout=20)
