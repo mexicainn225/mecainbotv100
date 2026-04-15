@@ -1,6 +1,6 @@
 import telebot, random, os, threading, time
 from datetime import datetime, timedelta
-from flask import Flask, request # Ajout de request pour le webhook
+from flask import Flask, request
 from pymongo import MongoClient
 
 app = Flask(__name__)
@@ -25,12 +25,10 @@ admin_state = {}
 @app.route('/webhook1win', methods=['POST'])
 def handle_1win_notification():
     data = request.json
-    # 1win envoie souvent 'uid' ou 'player_id'
     p_id = str(data.get('uid') or data.get('player_id'))
     amount = data.get('sum', 'un certain montant')
 
     if p_id:
-        # On cherche l'utilisateur qui possède cet ID 1win
         user = users_col.find_one({"player_id": p_id})
         if user:
             users_col.update_one({"_id": user['_id']}, {"$set": {"is_vip": True}})
@@ -93,7 +91,7 @@ def start(msg):
     if msg.from_user.id == ADMIN_ID:
         btns.append("⚙️ CONFIGURATION")
     markup.add(*btns)
-    bot.send_message(msg.chat.id, "🛰 **Système Lucky Jet Connecté**\nEnregistrez votre ID pour l'activation auto.", reply_markup=markup, parse_mode='Markdown')
+    bot.send_message(msg.chat.id, "🛰 **Système Lucky Jet Connecté**", reply_markup=markup, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "🚀 SIGNAL")
 def signal_handler(msg):
@@ -102,13 +100,17 @@ def signal_handler(msg):
         t_time, cote, prev = get_next_signal()
         rappel_time = t_time + timedelta(minutes=4)
         
+        # Format HH:MM À HH:MM (comme avant)
         main_start = t_time.strftime('%H:%M')
+        main_end = (t_time + timedelta(minutes=1)).strftime('%H:%M')
+        
         rappel_start = rappel_time.strftime('%H:%M')
+        rappel_end = (rappel_time + timedelta(minutes=1)).strftime('%H:%M')
         
         caption = (f"🚀 **PRÉDICTION LUCKY JET**\n"
                    f"━━━━━━━━━━━━━━━━━━\n"
-                   f"📍 **SIGNAL** : `{main_start}`\n"
-                   f"⚠️ **RATTRAPAGE** : `{rappel_start}`\n"
+                   f"📍 **SIGNAL** : `{main_start} À {main_end}`\n"
+                   f"⚠️ **RATTRAPAGE** : `{rappel_start} À {rappel_end}`\n"
                    f"━━━━━━━━━━━━━━━━━━\n"
                    f"📈 **OBJECTIF** : `{cote}X` \n"
                    f"🎯 **SÉCURITÉ** : `{prev}X` \n"
@@ -127,16 +129,13 @@ def signal_handler(msg):
 
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
 def handle_id_sent(msg):
-    # Enregistrement de l'ID joueur pour le Webhook
     users_col.update_one(
         {"_id": msg.from_user.id}, 
         {"$set": {"player_id": msg.text}}, 
         upsert=True
     )
-    
     bot.send_message(msg.chat.id, "⏳ **ID Joueur enregistré !**\n\nFaites maintenant votre dépôt sur 1win. Votre accès VIP s'activera **automatiquement** dès confirmation.")
     
-    # Notification pour l'admin (au cas où l'auto-activation échoue)
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(telebot.types.InlineKeyboardButton("✅ ACTIVER MANUELLEMENT", callback_data=f"val_{msg.from_user.id}"))
     bot.send_message(ADMIN_ID, f"🆕 **NOUVEL ID REÇU**\n🆔 ID Joueur : `{msg.text}`", reply_markup=markup, parse_mode='Markdown')
