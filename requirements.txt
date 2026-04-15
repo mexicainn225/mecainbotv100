@@ -2,3 +2,5 @@ pyTelegramBotAPI
 pymongo
 flask
 gunicorn
+dnspython
+pytz
