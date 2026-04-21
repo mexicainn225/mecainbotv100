@@ -77,7 +77,7 @@ def get_next_signal():
 
     random.seed(target_time.timestamp())
     cote = round(random.uniform(10.0, 85.0), 2)
-    prev = round(random.uniform(5.0, 8.0), 2)
+    prev = round(random.uniform(3.0, 4.0), 2)
     random.seed() 
     return target_time, cote, prev
 
