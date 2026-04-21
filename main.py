@@ -98,19 +98,14 @@ def signal_handler(msg):
     u = get_user(msg.from_user.id)
     if msg.from_user.id == ADMIN_ID or u.get('is_vip'):
         t_time, cote, prev = get_next_signal()
-        rappel_time = t_time + timedelta(minutes=4)
         
-        # Format HH:MM À HH:MM (comme avant)
+        # Format HH:MM À HH:MM
         main_start = t_time.strftime('%H:%M')
         main_end = (t_time + timedelta(minutes=1)).strftime('%H:%M')
-        
-        rappel_start = rappel_time.strftime('%H:%M')
-        rappel_end = (rappel_time + timedelta(minutes=1)).strftime('%H:%M')
         
         caption = (f"🚀 **PRÉDICTION LUCKY JET**\n"
                    f"━━━━━━━━━━━━━━━━━━\n"
                    f"📍 **SIGNAL** : `{main_start} À {main_end}`\n"
-                   f"⚠️ **RATTRAPAGE** : `{rappel_start} À {rappel_end}`\n"
                    f"━━━━━━━━━━━━━━━━━━\n"
                    f"📈 **OBJECTIF** : `{cote}X` \n"
                    f"🎯 **SÉCURITÉ** : `{prev}X` \n"
@@ -127,18 +122,33 @@ def signal_handler(msg):
     else:
         bot.send_message(msg.chat.id, "⚠️ **ACCÈS VIP REQUIS**\n\nEnvoyez votre ID joueur pour commencer.")
 
+# --- SÉCURITÉ ANTI-DOUBLON ID ---
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
 def handle_id_sent(msg):
+    player_id = msg.text
+    
+    # Vérification si l'ID est déjà pris par un autre compte Telegram
+    existing_user = users_col.find_one({"player_id": player_id})
+    
+    if existing_user:
+        if existing_user['_id'] == msg.from_user.id:
+            bot.send_message(msg.chat.id, "✅ Ton ID est déjà enregistré. En attente du dépôt.")
+        else:
+            bot.send_message(msg.chat.id, "❌ **ERREUR** : Cet ID est déjà utilisé par un autre utilisateur.")
+        return
+
+    # Si l'ID est libre, on l'enregistre
     users_col.update_one(
         {"_id": msg.from_user.id}, 
-        {"$set": {"player_id": msg.text}}, 
+        {"$set": {"player_id": player_id}}, 
         upsert=True
     )
+    
     bot.send_message(msg.chat.id, "⏳ **ID Joueur enregistré !**\n\nFaites maintenant votre dépôt sur 1win. Votre accès VIP s'activera **automatiquement** dès confirmation.")
     
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(telebot.types.InlineKeyboardButton("✅ ACTIVER MANUELLEMENT", callback_data=f"val_{msg.from_user.id}"))
-    bot.send_message(ADMIN_ID, f"🆕 **NOUVEL ID REÇU**\n🆔 ID Joueur : `{msg.text}`", reply_markup=markup, parse_mode='Markdown')
+    bot.send_message(ADMIN_ID, f"🆕 **NOUVEL ID REÇU**\n🆔 ID Joueur : `{player_id}`", reply_markup=markup, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "📊 STATISTIQUES")
 def stats_handler(msg):
