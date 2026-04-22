@@ -98,7 +98,7 @@ def signal_handler(msg):
     u = get_user(msg.from_user.id)
     if msg.from_user.id == ADMIN_ID or u.get('is_vip'):
         t_time, cote, prev = get_next_signal()
-        rappel_time = t_time + timedelta(minutes=3)
+        rappel_time = t_time + timedelta(minutes=6)
         
         # Format HH:MM À HH:MM
         main_start = t_time.strftime('%H:%M')
