@@ -98,19 +98,18 @@ def signal_handler(msg):
     u = get_user(msg.from_user.id)
     if msg.from_user.id == ADMIN_ID or u.get('is_vip'):
         t_time, cote, prev = get_next_signal()
-        rappel_time = t_time + timedelta(minutes=5)
         
-        # Format HH:MM À HH:MM
-        main_start = t_time.strftime('%H:%M')
-        main_end = (t_time + timedelta(minutes=1)).strftime('%H:%M')
+        # Signal 2 calculé à +3 minutes (tu peux changer en 5 si besoin)
+        rappel_time = t_time + timedelta(minutes=3)
         
-        rappel_start = rappel_time.strftime('%H:%M')
-        rappel_end = (rappel_time + timedelta(minutes=1)).strftime('%H:%M')
+        # Format HH:MM (Une seule minute affichée)
+        main_time = t_time.strftime('%H:%M')
+        rappel_time_str = rappel_time.strftime('%H:%M')
         
         caption = (f"🚀 **PRÉDICTION LUCKY JET**\n"
                    f"━━━━━━━━━━━━━━━━━━\n"
-                   f"📍 **SIGNAL 1** : `{main_start} À {main_end}`\n"
-                   f"📍 **SIGNAL 2** : `{rappel_start} À {rappel_end}`\n"
+                   f"📍 **SIGNAL 1** : `{main_time}`\n"
+                   f"📍 **SIGNAL 2** : `{rappel_time_str}`\n"
                    f"━━━━━━━━━━━━━━━━━━\n"
                    f"📈 **OBJECTIF** : `{cote}X` \n"
                    f"🎯 **SÉCURITÉ** : `{prev}X` \n"
