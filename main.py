@@ -100,7 +100,7 @@ def signal_handler(msg):
         t_time, cote, prev = get_next_signal()
         
         # Signal 2 calculé à +3 minutes (tu peux changer en 5 si besoin)
-        rappel_time = t_time + timedelta(minutes=3)
+        rappel_time = t_time + timedelta(minutes=5)
         
         # Format HH:MM (Une seule minute affichée)
         main_time = t_time.strftime('%H:%M')
