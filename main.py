@@ -77,7 +77,7 @@ def get_next_signal():
 
     random.seed(target_time.timestamp())
     cote = round(random.uniform(10.0, 85.0), 2)
-    prev = round(random.uniform(3.0, 4.0), 2)
+    prev = round(random.uniform(1.5, 1.5), 2)
     random.seed() 
     return target_time, cote, prev
 
@@ -100,7 +100,7 @@ def signal_handler(msg):
         t_time, cote, prev = get_next_signal()
         
         # Signal 2 calculé à +3 minutes (tu peux changer en 5 si besoin)
-        rappel_time = t_time + timedelta(minutes=5)
+        rappel_time = t_time + timedelta(minutes=3)
         
         # Format HH:MM (Une seule minute affichée)
         main_time = t_time.strftime('%H:%M')
