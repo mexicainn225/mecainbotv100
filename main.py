@@ -100,7 +100,7 @@ def signal_handler(msg):
     if msg.from_user.id == ADMIN_ID or u.get('is_vip'):
         t_time, cote, prev = get_next_signal()
         
-        rappel_time = t_time + timedelta(minutes=3)
+        rappel_time = t_time + timedelta(minutes=2)
         main_time = t_time.strftime('%H:%M')
         rappel_time_str = rappel_time.strftime('%H:%M')
         
