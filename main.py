@@ -41,7 +41,7 @@ def handle_1win_notification():
 
 @app.route('/')
 def home():
-    return "Système Lucky Jet Pro - Activation Auto OK"
+    return "Système Lucky Jet Pro - Robot 1 OK"
 
 # --- FONCTIONS SYSTÈME ---
 def get_user(u_id):
@@ -52,7 +52,8 @@ def get_user(u_id):
     return user
 
 def get_base_minute():
-    conf = config_col.find_one({"_id": "settings"})
+    # MODIFICATION : Utilise settings_robot_1 pour être indépendant
+    conf = config_col.find_one({"_id": "settings_robot_1"})
     return conf['minute'] if conf else 16 
 
 def get_next_signal():
@@ -91,7 +92,7 @@ def start(msg):
     if msg.from_user.id == ADMIN_ID:
         btns.append("⚙️ CONFIGURATION")
     markup.add(*btns)
-    bot.send_message(msg.chat.id, "🛰 **Système Lucky Jet Connecté**", reply_markup=markup, parse_mode='Markdown')
+    bot.send_message(msg.chat.id, "🛰 **Système Lucky Jet Robot 1 Connecté**", reply_markup=markup, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "🚀 SIGNAL")
 def signal_handler(msg):
@@ -99,10 +100,7 @@ def signal_handler(msg):
     if msg.from_user.id == ADMIN_ID or u.get('is_vip'):
         t_time, cote, prev = get_next_signal()
         
-        # Signal 2 calculé à +3 minutes (tu peux changer en 5 si besoin)
         rappel_time = t_time + timedelta(minutes=3)
-        
-        # Format HH:MM (Une seule minute affichée)
         main_time = t_time.strftime('%H:%M')
         rappel_time_str = rappel_time.strftime('%H:%M')
         
@@ -124,45 +122,38 @@ def signal_handler(msg):
         except:
             bot.send_message(msg.chat.id, caption, reply_markup=btn, parse_mode='Markdown')
     else:
-        bot.send_message(msg.chat.id, "⚠️ **ACCÈS VIP REQUIS**\n\nEnvoyez votre ID joueur pour commencer.")
+        bot.send_message(msg.chat.id, "⚠️ **ACCÈS VIP REQUIS**")
+
+@bot.message_handler(func=lambda m: m.text == "⚙️ CONFIGURATION" and m.from_user.id == ADMIN_ID)
+def config_admin(msg):
+    admin_state[ADMIN_ID] = "WAIT_BASE"
+    bot.send_message(ADMIN_ID, "🛠 **RÉGLAGE CYCLE (ROBOT 1)**\nEntrez la minute de base :")
+
+@bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAIT_BASE" and m.from_user.id == ADMIN_ID)
+def save_config(msg):
+    if msg.text.isdigit():
+        # MODIFICATION : Enregistre dans settings_robot_1
+        config_col.update_one({"_id": "settings_robot_1"}, {"$set": {"minute": int(msg.text)}}, upsert=True)
+        bot.send_message(ADMIN_ID, f"✅ Cycle Robot 1 réglé sur {msg.text}")
+    admin_state[ADMIN_ID] = None
 
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
 def handle_id_sent(msg):
     player_id = msg.text
-    
-    # Sécurité anti-doublon
     existing_user = users_col.find_one({"player_id": player_id})
     if existing_user and existing_user['_id'] != msg.from_user.id:
-        bot.send_message(msg.chat.id, "❌ **ERREUR** : Cet ID est déjà utilisé par un autre utilisateur.")
+        bot.send_message(msg.chat.id, "❌ **ERREUR** : Cet ID est déjà utilisé.")
         return
-
-    users_col.update_one(
-        {"_id": msg.from_user.id}, 
-        {"$set": {"player_id": player_id}}, 
-        upsert=True
-    )
-    bot.send_message(msg.chat.id, "⏳ **ID Joueur enregistré !**\n\nFaites maintenant votre dépôt sur 1win. Votre accès VIP s'activera **automatiquement** dès confirmation.")
-    
+    users_col.update_one({"_id": msg.from_user.id}, {"$set": {"player_id": player_id}}, upsert=True)
+    bot.send_message(msg.chat.id, "⏳ **ID Joueur enregistré !**")
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(telebot.types.InlineKeyboardButton("✅ ACTIVER MANUELLEMENT", callback_data=f"val_{msg.from_user.id}"))
-    bot.send_message(ADMIN_ID, f"🆕 **NOUVEL ID REÇU**\n🆔 ID Joueur : `{player_id}`", reply_markup=markup, parse_mode='Markdown')
+    bot.send_message(ADMIN_ID, f"🆕 **ID REÇU (R1)**\n🆔 ID Joueur : `{player_id}`", reply_markup=markup, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "📊 STATISTIQUES")
 def stats_handler(msg):
     total_users = users_col.count_documents({})
     bot.send_message(msg.chat.id, f"📊 **STATISTIQUES**\n✅ Succès : `98.4%` \n👥 Joueurs : `{total_users}`", parse_mode='Markdown')
-
-@bot.message_handler(func=lambda m: m.text == "⚙️ CONFIGURATION" and m.from_user.id == ADMIN_ID)
-def config_admin(msg):
-    admin_state[ADMIN_ID] = "WAIT_BASE"
-    bot.send_message(ADMIN_ID, "🛠 **RÉGLAGE CYCLE**\nEntrez la minute de base :")
-
-@bot.message_handler(func=lambda m: admin_state.get(ADMIN_ID) == "WAIT_BASE" and m.from_user.id == ADMIN_ID)
-def save_config(msg):
-    if msg.text.isdigit():
-        config_col.update_one({"_id": "settings"}, {"$set": {"minute": int(msg.text)}}, upsert=True)
-        bot.send_message(ADMIN_ID, f"✅ Cycle réglé sur {msg.text}")
-    admin_state[ADMIN_ID] = None
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("val_"))
 def accept_vip(c):
@@ -171,7 +162,6 @@ def accept_vip(c):
     bot.send_message(uid, "🌟 **VIP activé !** Profitez des signaux.")
     bot.answer_callback_query(c.id, "Activé")
 
-# --- LANCEMENT ---
 if __name__ == "__main__":
     bot.remove_webhook()
     time.sleep(1)
