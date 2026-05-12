@@ -18,16 +18,24 @@ users_col = db['users']
 LIEN_INSCRIPTION = "https://lkbb.cc/e2d8"
 ID_VIDEO_UNIQUE = "https://t.me/gagnantpro1xbet/138958" 
 
-# --- LOGIQUE DE PAIRES DE MINUTES ---
+# --- LOGIQUE DE PAIRES AVEC ÉCART DE 2 MIN ---
 def get_next_signal():
     now = datetime.now()
     
-    # MODIFICATION ICI : (3, 5) au lieu de (2, 3)
+    # Liste mise à jour : On commence à 03, et chaque S2 est à +2 minutes
     pailles_minutes = [
-        (3, 5),   # Signal 1: :03 / Signal 2: :05
-        (8, 10), (12, 13), (18, 20), 
-        (22, 23), (28, 30), (32, 33), (38, 40),
-        (42, 43), (48, 50), (52, 53), (58, 59)
+        (3, 5),   # Signal 1 : 03 | Signal 2 : 05
+        (8, 10),  # Signal 1 : 08 | Signal 2 : 10
+        (13, 15), # Signal 1 : 13 | Signal 2 : 15
+        (18, 20), # Signal 1 : 18 | Signal 2 : 20
+        (23, 25), 
+        (28, 30), 
+        (33, 35),
+        (38, 40),
+        (43, 45),
+        (48, 50),
+        (53, 55),
+        (58, 00)  # Le dernier signal boucle sur l'heure suivante
     ]
     
     current_min = now.minute
@@ -45,8 +53,14 @@ def get_next_signal():
 
     s1_f, s2_f = target_pair
     time_s1 = now.replace(hour=target_hour, minute=s1_f, second=0, microsecond=0)
-    time_s2 = now.replace(hour=target_hour, minute=s2_f, second=0, microsecond=0)
+    
+    # Gestion du passage à l'heure suivante pour le Signal 2 si S2 = 00
+    h2 = target_hour
+    if s2_f < s1_f: 
+        h2 = (target_hour + 1) % 24
+    time_s2 = now.replace(hour=h2, minute=s2_f, second=0, microsecond=0)
 
+    # GÉNÉRATION DES CÔTES (SÉCURITÉ 1.50)
     random.seed(time_s1.timestamp())
     cote = round(random.uniform(10.0, 85.0), 2)
     prev = 1.50
@@ -85,58 +99,46 @@ def signal_handler(msg):
     else:
         bot.send_message(msg.chat.id, "⚠️ **ACCÈS VIP REQUIS**\n\nEnvoyez votre ID joueur pour activation.")
 
-# --- GESTION DES ID & NOTIFICATION ADMIN ---
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
 def handle_id(msg):
     users_col.update_one({"_id": msg.from_user.id}, {"$set": {"player_id": msg.text}}, upsert=True)
-    bot.send_message(msg.chat.id, "⏳ **ID enregistré !**\nL'administrateur va vérifier et activer votre accès sous peu.")
+    bot.send_message(msg.chat.id, "⏳ **ID enregistré !**\nL'admin va valider votre accès.")
     
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(telebot.types.InlineKeyboardButton("✅ ACTIVER VIP", callback_data=f"val_{msg.from_user.id}"))
-    
-    bot.send_message(
-        ADMIN_ID, 
-        f"🆕 **NOUVEL ID REÇU**\n\n👤 Utilisateur : @{msg.from_user.username or 'Sans nom'}\n🆔 ID Joueur : `{msg.text}`\n🆔 Telegram ID : `{msg.from_user.id}`", 
-        reply_markup=markup, 
-        parse_mode='Markdown'
-    )
+    bot.send_message(ADMIN_ID, f"🆕 **NOUVEL ID**\n🆔 ID: `{msg.text}`", reply_markup=markup, parse_mode='Markdown')
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("val_"))
-def valider(c):
+def valider_callback(c):
     uid = int(c.data.split("_")[1])
     users_col.update_one({"_id": uid}, {"$set": {"is_vip": True}})
     bot.answer_callback_query(c.id, "VIP Activé !")
-    bot.edit_message_text(f"✅ Accès VIP activé pour l'utilisateur `{uid}`", c.message.chat.id, c.message.message_id)
+    bot.edit_message_text(f"✅ VIP activé pour {uid}", c.message.chat.id, c.message.message_id)
     try:
-        bot.send_message(uid, "🌟 **Félicitations !** Votre accès VIP a été activé. Cliquez sur **🚀 SIGNAL** pour commencer.")
+        bot.send_message(uid, "🌟 **Accès VIP activé !** Cliquez sur 🚀 **SIGNAL**.")
     except:
         pass
 
-@bot.message_handler(func=lambda m: m.text == "📊 STATISTIQUES")
-def stats_handler(msg):
-    total_users = users_col.count_documents({})
-    bot.send_message(msg.chat.id, f"📊 **STATISTIQUES**\n✅ Succès : `98.4%` \n👥 Joueurs : `{total_users}`", parse_mode='Markdown')
-
 # --- WEBHOOK & LANCEMENT ---
 @app.route('/webhook1win', methods=['POST'])
-def handle_1win():
+def handle_webhook():
     data = request.json
     p_id = str(data.get('uid') or data.get('player_id'))
     if p_id:
         user = users_col.find_one({"player_id": p_id})
         if user:
             users_col.update_one({"_id": user['_id']}, {"$set": {"is_vip": True}})
-            bot.send_message(user['_id'], "✅ **DÉPÔT DÉTECTÉ**\nAccès VIP activé !")
+            bot.send_message(user['_id'], "✅ **DÉPÔT DÉTECTÉ**\nVIP activé !")
             return "OK", 200
     return "Ignored", 200
 
 @app.route('/')
 def home():
-    return "Robot 1 - Cycle 03/05 OK"
+    return "Robot 1 - Mode 03/05 OK"
 
 if __name__ == "__main__":
     bot.remove_webhook()
     time.sleep(1)
-    render_port = int(os.environ.get("PORT", 10000))
-    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=render_port), daemon=True).start()
+    port = int(os.environ.get("PORT", 10000))
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port), daemon=True).start()
     bot.infinity_polling(timeout=20)
