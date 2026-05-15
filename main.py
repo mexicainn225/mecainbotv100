@@ -1,4 +1,4 @@
-import telebot, random, os, threading, time
+Import telebot, random, os, threading, time
 from datetime import datetime, timedelta
 from flask import Flask, request
 from pymongo import MongoClient
@@ -21,11 +21,8 @@ ID_VIDEO_UNIQUE = "https://t.me/gagnantpro1xbet/138958"
 # --- LOGIQUE DE PAIRES DE MINUTES ---
 def get_next_signal():
     now = datetime.now()
-    
-    # MODIFICATION ICI : (3, 5) au lieu de (2, 3)
     pailles_minutes = [
-        (3, 5),   # Signal 1: :03 / Signal 2: :05
-        (8, 10), (12, 13), (18, 20), 
+        (2, 3), (8, 10), (12, 13), (18, 20), 
         (22, 23), (28, 30), (32, 33), (38, 40),
         (42, 43), (48, 50), (52, 53), (58, 59)
     ]
@@ -88,9 +85,13 @@ def signal_handler(msg):
 # --- GESTION DES ID & NOTIFICATION ADMIN ---
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
 def handle_id(msg):
+    # Enregistre l'ID dans la DB
     users_col.update_one({"_id": msg.from_user.id}, {"$set": {"player_id": msg.text}}, upsert=True)
+    
+    # Message de confirmation à l'utilisateur
     bot.send_message(msg.chat.id, "⏳ **ID enregistré !**\nL'administrateur va vérifier et activer votre accès sous peu.")
     
+    # Envoi de la notification à l'ADMIN avec bouton d'activation
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(telebot.types.InlineKeyboardButton("✅ ACTIVER VIP", callback_data=f"val_{msg.from_user.id}"))
     
@@ -105,10 +106,14 @@ def handle_id(msg):
 def valider(c):
     uid = int(c.data.split("_")[1])
     users_col.update_one({"_id": uid}, {"$set": {"is_vip": True}})
+    
+    # Confirme à l'admin
     bot.answer_callback_query(c.id, "VIP Activé !")
     bot.edit_message_text(f"✅ Accès VIP activé pour l'utilisateur `{uid}`", c.message.chat.id, c.message.message_id)
+    
+    # Prévient l'utilisateur
     try:
-        bot.send_message(uid, "🌟 **Félicitations !** Votre accès VIP a été activé. Cliquez sur **🚀 SIGNAL** pour commencer.")
+        bot.send_message(uid, "🌟 **Félicitations !** Votre accès VIP a été activé par l'administrateur. Cliquez sur **🚀 SIGNAL** pour commencer.")
     except:
         pass
 
@@ -132,7 +137,7 @@ def handle_1win():
 
 @app.route('/')
 def home():
-    return "Robot 1 - Cycle 03/05 OK"
+    return "Robot 1 - Mode Paires & Admin Ready"
 
 if __name__ == "__main__":
     bot.remove_webhook()
