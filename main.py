@@ -23,7 +23,7 @@ config_col = db['config']  # Collection pour stocker la minute de départ de l'a
 LIEN_INSCRIPTION = "https://lkbb.cc/e2d8"
 ID_VIDEO_UNIQUE = "https://t.me/gagnantpro1xbet/138958" 
 
-# --- LOGIQUE DE SIGNAL UNIQUE AVEC SECONDES FIXES (:30) ---
+# --- LOGIQUE DE SIGNAL UNIQUE AVEC SECONDES FIXES (:50) ---
 def get_next_signal():
     now = datetime.now()
     
@@ -47,8 +47,8 @@ def get_next_signal():
         if m > current_min:
             target_s1 = m
             break
-        # Si on est sur la même minute mais que les 30 secondes sont dépassées, on passe au suivant
-        elif m == current_min and now.second >=50:
+        # Si on est sur la même minute mais que les 50 secondes sont dépassées, on passe au suivant
+        elif m == current_min and now.second >= 50:
             continue
         elif m == current_min and now.second < 50:
             target_s1 = m
@@ -59,9 +59,9 @@ def get_next_signal():
         target_s1 = target_minutes[0]
         next_hour_dt = now + timedelta(hours=1)
         target_hour = next_hour_dt.hour
-        time_signal = now.replace(year=next_hour_dt.year, month=next_hour_dt.month, day=next_hour_dt.day, hour=target_hour, minute=target_s1, second=30, microsecond=0)
+        time_signal = now.replace(year=next_hour_dt.year, month=next_hour_dt.month, day=next_hour_dt.day, hour=target_hour, minute=target_s1, second=50, microsecond=0)
     else:
-        time_signal = now.replace(hour=target_hour, minute=target_s1, second=30, microsecond=0)
+        time_signal = now.replace(hour=target_hour, minute=target_s1, second=50, microsecond=0)
 
     # GÉNÉRATION DES CÔTES (SÉCURITÉ FIXE 1.50)
     random.seed(time_signal.timestamp())
@@ -120,7 +120,6 @@ def config_menu(msg):
         telebot.types.InlineKeyboardButton("Minute :01", callback_data="set_1"),
         telebot.types.InlineKeyboardButton("Minute :02", callback_data="set_2")
     )
-    # Correction : Suppression du paramètre doc_source obsolète qui bloquait le bot
     bot.send_message(
         msg.chat.id, 
         f"⚙️ **CONFIGURATION DES MINUTES**\n\nMinute de départ actuelle : `:{current_start:02d}`\n\n"
@@ -135,7 +134,7 @@ def set_minute_callback(c):
     new_min = int(c.data.split("_")[1])
     config_col.update_one({"_id": "settings"}, {"$set": {"start_minute": new_min}}, upsert=True)
     bot.answer_callback_query(c.id, f"Départ configuré à :{new_min:02d}")
-    bot.edit_message_text(f"✅ **Configuration mise à jour**\nLes signaux commenceront désormais aux minutes : `:{new_min:02d}:30`, `:{new_min+4:02d}:30`, `:{new_min+8:02d}:30`...", c.message.chat.id, c.message.message_id, parse_mode='Markdown')
+    bot.edit_message_text(f"✅ **Configuration mise à jour**\nLes signaux commenceront désormais aux minutes : `:{new_min:02d}:50`, `:{new_min+4:02d}:50`, `:{new_min+8:02d}:50`...", c.message.chat.id, c.message.message_id, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.from_user.id == ADMIN_ID and m.text.lower().startswith("depart"))
 def set_minute_text(msg):
@@ -198,7 +197,7 @@ def handle_webhook():
 
 @app.route('/')
 def home():
-    return "Robot 1 en ligne - Signal Unique à :30s OK"
+    return "Robot 1 en ligne - Signal Unique à :50s OK"
 
 if __name__ == "__main__":
     bot.remove_webhook()
