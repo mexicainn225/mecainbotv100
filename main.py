@@ -3,7 +3,7 @@ import random
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, request
 from pymongo import MongoClient
 
@@ -23,16 +23,15 @@ config_col = db['config']  # Collection pour stocker la minute de départ de l'a
 LIEN_INSCRIPTION = "https://lkbb.cc/e2d8"
 ID_VIDEO_UNIQUE = "https://t.me/gagnantpro1xbet/138958" 
 
-# --- LOGIQUE DE PAIRES DE MINUTES DYNAMIQUES ---
+# --- LOGIQUE DE SIGNAL UNIQUE AVEC SECONDES FIXES (:30) ---
 def get_next_signal():
     now = datetime.now()
     
-    # Récupérer la minute de départ depuis MongoDB (par défaut : 1)
+    # Récupérer la minute de départ depuis MongoDB (par défaut : 0)
     config = config_col.find_one({"_id": "settings"})
-    start_min = config.get("start_minute", 1) if config else 1
+    start_min = config.get("start_minute", 0) if config else 0
     
-    # Générer la liste des minutes du Signal 1 toutes les 4 minutes à partir du départ choisi
-    # Exemple si start_min = 1 : [1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57]
+    # Générer la liste des minutes cibles sur une heure
     target_minutes = []
     current_calc_min = start_min
     while current_calc_min < 60:
@@ -43,36 +42,35 @@ def get_next_signal():
     target_s1 = None
     target_hour = now.hour
 
-    # Trouver la prochaine minute de Signal 1 disponible
+    # Trouver la prochaine minute disponible
     for m in target_minutes:
         if m > current_min:
             target_s1 = m
             break
+        # Si on est sur la même minute mais que les 30 secondes sont dépassées, on passe au suivant
+        elif m == current_min and now.second >= 30:
+            continue
+        elif m == current_min and now.second < 30:
+            target_s1 = m
+            break
     
-    # Si l'heure est finie, on passe au premier créneau de l'heure suivante
+    # Gestion du passage à l'heure suivante (garantit la continuité même à minuit)
     if target_s1 is None:
         target_s1 = target_minutes[0]
-        target_hour = (now.hour + 1) % 24
-
-    # Le Signal 2 suit immédiatement 1 minute après le Signal 1 (ex: 41 -> 42, 45 -> 46)
-    target_s2 = target_s1 + 1
-
-    # Gestion du débordement si le Signal 2 bascule sur l'heure suivante (ex: 59 -> 00)
-    target_hour_s2 = target_hour
-    if target_s2 >= 60:
-        target_s2 = target_s2 % 60
-        target_hour_s2 = (target_hour + 1) % 24
-
-    time_s1 = now.replace(hour=target_hour, minute=target_s1, second=0, microsecond=0)
-    time_s2 = now.replace(hour=target_hour_s2, minute=target_s2, second=0, microsecond=0)
+        # Utilisation de timedelta pour éviter tout bug lors du changement de jour à minuit
+        next_hour_dt = now + timedelta(hours=1)
+        target_hour = next_hour_dt.hour
+        time_signal = now.replace(year=next_hour_dt.year, month=next_hour_dt.month, day=next_hour_dt.day, hour=target_hour, minute=target_s1, second=30, microsecond=0)
+    else:
+        time_signal = now.replace(hour=target_hour, minute=target_s1, second=30, microsecond=0)
 
     # GÉNÉRATION DES CÔTES (SÉCURITÉ FIXE 1.50)
-    random.seed(time_s1.timestamp())
+    random.seed(time_signal.timestamp())
     cote = round(random.uniform(10.0, 85.0), 2)
     prev = 1.50
     random.seed() 
     
-    return time_s1, time_s2, cote, prev
+    return time_signal, cote, prev
 
 # --- HANDLERS ---
 
@@ -89,12 +87,12 @@ def start(msg):
 def signal_handler(msg):
     u = users_col.find_one({"_id": msg.from_user.id})
     if msg.from_user.id == ADMIN_ID or (u and u.get('is_vip')):
-        t_s1, t_s2, cote, prev = get_next_signal()
+        t_s1, cote, prev = get_next_signal()
         
+        # Formatage de l'heure avec les secondes incluses : %H:%M:%S
         caption = (f"🚀 **PRÉDICTION LUCKY JET**\n"
                    f"━━━━━━━━━━━━━━━━━━\n"
-                   f"📍 **SIGNAL 1** : `{t_s1.strftime('%H:%M')}`\n"
-                   f"📍 **SIGNAL 2** : `{t_s2.strftime('%H:%M')}`\n"
+                   f"📍 **SIGNAL** : `{t_s1.strftime('%H:%M:%S')}`\n"
                    f"━━━━━━━━━━━━━━━━━━\n"
                    f"📈 **OBJECTIF** : `{cote}X` \n"
                    f"🎯 **SÉCURITÉ** : `{prev}X` \n"
@@ -116,20 +114,21 @@ def signal_handler(msg):
 @bot.message_handler(func=lambda m: m.text == "⚙️ CONFIGURATION" and m.from_user.id == ADMIN_ID)
 def config_menu(msg):
     config = config_col.find_one({"_id": "settings"})
-    current_start = config.get("start_minute", 1) if config else 1
+    current_start = config.get("start_minute", 0) if config else 0
     
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(
+        telebot.types.InlineKeyboardButton("Minute :00", callback_data="set_0"),
         telebot.types.InlineKeyboardButton("Minute :01", callback_data="set_1"),
-        telebot.types.InlineKeyboardButton("Minute :02", callback_data="set_2"),
-        telebot.types.InlineKeyboardButton("Minute :03", callback_data="set_3")
+        telebot.types.InlineKeyboardButton("Minute :02", callback_data="set_2")
     )
     bot.send_message(
         msg.chat.id, 
         f"⚙️ **CONFIGURATION DES MINUTES**\n\nMinute de départ actuelle : `:{current_start:02d}`\n\n"
         "Pour changer sur une autre valeur libre, envoie un message avec le mot-clé **depart** suivi de la minute.\n"
-        "Exemple : `depart 1` ou `depart 3`", 
+        "Exemple : `depart 0` ou `depart 2`", 
         reply_markup=markup,
+        doc_source=None,
         parse_mode='Markdown'
     )
 
@@ -138,7 +137,7 @@ def set_minute_callback(c):
     new_min = int(c.data.split("_")[1])
     config_col.update_one({"_id": "settings"}, {"$set": {"start_minute": new_min}}, upsert=True)
     bot.answer_callback_query(c.id, f"Départ configuré à :{new_min:02d}")
-    bot.edit_message_text(f"✅ **Configuration mise à jour**\nLes paires commenceront désormais aux minutes : `:{new_min:02d}`, `:{new_min+4:02d}`, `:{new_min+8:02d}`...", c.message.chat.id, c.message.message_id, parse_mode='Markdown')
+    bot.edit_message_text(f"✅ **Configuration mise à jour**\nLes signaux commenceront désormais aux minutes : `:{new_min:02d}:30`, `:{new_min+4:02d}:30`, `:{new_min+8:02d}:30`...", c.message.chat.id, c.message.message_id, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.from_user.id == ADMIN_ID and m.text.lower().startswith("depart"))
 def set_minute_text(msg):
@@ -150,7 +149,7 @@ def set_minute_text(msg):
         else:
             bot.send_message(msg.chat.id, "⚠️ Choisis une minute valide entre 0 et 59.")
     except:
-        bot.send_message(msg.chat.id, "Format incorrect. Écris par exemple : `depart 1`")
+        bot.send_message(msg.chat.id, "Format incorrect. Écris par exemple : `depart 0`")
 
 # --- GESTION DES ID & ACTIVATION ADMIN ---
 @bot.message_handler(func=lambda m: m.text.isdigit() and len(m.text) >= 7)
@@ -201,7 +200,7 @@ def handle_webhook():
 
 @app.route('/')
 def home():
-    return "Robot 1 en ligne - Cycle Dynamique 4min"
+    return "Robot 1 en ligne - Signal Unique à :30s OK"
 
 if __name__ == "__main__":
     bot.remove_webhook()
