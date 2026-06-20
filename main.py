@@ -57,7 +57,6 @@ def get_next_signal():
     # Gestion du passage à l'heure suivante (garantit la continuité même à minuit)
     if target_s1 is None:
         target_s1 = target_minutes[0]
-        # Utilisation de timedelta pour éviter tout bug lors du changement de jour à minuit
         next_hour_dt = now + timedelta(hours=1)
         target_hour = next_hour_dt.hour
         time_signal = now.replace(year=next_hour_dt.year, month=next_hour_dt.month, day=next_hour_dt.day, hour=target_hour, minute=target_s1, second=30, microsecond=0)
@@ -89,7 +88,6 @@ def signal_handler(msg):
     if msg.from_user.id == ADMIN_ID or (u and u.get('is_vip')):
         t_s1, cote, prev = get_next_signal()
         
-        # Formatage de l'heure avec les secondes incluses : %H:%M:%S
         caption = (f"🚀 **PRÉDICTION LUCKY JET**\n"
                    f"━━━━━━━━━━━━━━━━━━\n"
                    f"📍 **SIGNAL** : `{t_s1.strftime('%H:%M:%S')}`\n"
@@ -122,13 +120,13 @@ def config_menu(msg):
         telebot.types.InlineKeyboardButton("Minute :01", callback_data="set_1"),
         telebot.types.InlineKeyboardButton("Minute :02", callback_data="set_2")
     )
+    # Correction : Suppression du paramètre doc_source obsolète qui bloquait le bot
     bot.send_message(
         msg.chat.id, 
         f"⚙️ **CONFIGURATION DES MINUTES**\n\nMinute de départ actuelle : `:{current_start:02d}`\n\n"
         "Pour changer sur une autre valeur libre, envoie un message avec le mot-clé **depart** suivi de la minute.\n"
         "Exemple : `depart 0` ou `depart 2`", 
         reply_markup=markup,
-        doc_source=None,
         parse_mode='Markdown'
     )
 
