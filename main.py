@@ -48,9 +48,9 @@ def get_next_signal():
             target_s1 = m
             break
         # Si on est sur la même minute mais que les 30 secondes sont dépassées, on passe au suivant
-        elif m == current_min and now.second >= 30:
+        elif m == current_min and now.second >=50:
             continue
-        elif m == current_min and now.second < 30:
+        elif m == current_min and now.second < 50:
             target_s1 = m
             break
     
